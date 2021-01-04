@@ -1,0 +1,81 @@
+city;site;habitat;Biomass
+Budapest;1-R;REF;2.304
+Budapest;2-R;REF;0
+Budapest;3-R;REF;5.568
+Budapest;4-R;REF;8.128
+Budapest;5-R;REF;0
+Budapest;1-HD-LM;RUD;0.608
+Budapest;2-HD-LM;RUD;9.44
+Budapest;3-HD-LM;RUD;4.576
+Budapest;4-HD-LM;RUD;0
+Budapest;5-HD-LM;RUD;0.896
+Budapest;1-HD-MM;TURF;6.72
+Budapest;2-HD-MM;TURF;4.128
+Budapest;3-HD-MM;TURF;8.896
+Budapest;4-HD-MM;TURF;2.048
+Budapest;5-HD-MM;TURF;13.184
+Budapest;1-LD-LM;REM;6.176
+Budapest;2-LD-LM;REM;0
+Budapest;3-LD-LM;REM;0.608
+Budapest;4-LD-LM;REM;0
+Budapest;5-LD-LM;REM;16
+Baltimore;D1;RUD;3.3408
+Baltimore;D2;RUD;10.56
+Baltimore;D3;RUD;37.8272
+Baltimore;D4;RUD;0
+Baltimore;D5;RUD;0.1856
+Baltimore;G1;TURF;12.416
+Baltimore;G2;TURF;3.8368
+Baltimore;G3;TURF;26.496
+Baltimore;G4;TURF;62.5504
+Baltimore;G5;TURF;1.1168
+Baltimore;RF1;REF;6.496
+Baltimore;RF2;REF;47.792
+Baltimore;RF3;REF;9.1232
+Baltimore;RF4;REF;0.1632
+Baltimore;RF5;REF;0.32
+Baltimore;RM1;REM;0.768
+Baltimore;RM2;REM;5.0496
+Baltimore;RM3;REM;178.176
+Baltimore;RM4;REM;51.8112
+Baltimore;RM5;REM;8.352
+Lahti;Lahti Park 1;TURF;73.344
+Lahti;Lahti Park 2;TURF;168.032
+Lahti;Lahti Park 3;TURF;2.4
+Lahti;Lahti Park 4;TURF;159.36
+Lahti;Lahti Park 5;TURF;14.624
+Lahti;Lahti Rem 1;REM;63.712
+Lahti;Lahti Rem 2;REM;32.288
+Lahti;Lahti Rem 3;REM;96.32
+Lahti;Lahti Rem 4;REM;69.6
+Lahti;Lahti Rem 5;REM;36.16
+Lahti;Lahti Rud 1;RUD;2.72
+Lahti;Lahti Rud 2;RUD;86.592
+Lahti;Lahti Rud 3;RUD;1.792
+Lahti;Lahti Rud 4;RUD;2.016
+Lahti;Lahti Rud 5;RUD;1.28
+Lahti;Lahti Ref 1;REF;NA
+Lahti;Lahti Ref 2;REF;3.552
+Lahti;Lahti Ref 3;REF;3.328
+Lahti;Lahti Ref 4;REF;6.176
+Lahti;Lahti Ref 5;REF;NA
+Helsinki;Helsinki Park 1;TURF;43.2512
+Helsinki;Helsinki Park 2;TURF;24.992
+Helsinki;Helsinki Park 3;TURF;23.904
+Helsinki;Helsinki Park 4;TURF;81.216
+Helsinki;Helsinki Park 5;TURF;73.376
+Helsinki;Helsinki Rem 1;REM;94.88
+Helsinki;Helsinki Rem 2;REM;21.12
+Helsinki;Helsinki Rem 3;REM;37.248
+Helsinki;Helsinki Rem 4;REM;0.64
+Helsinki;Helsinki Rem 5;REM;33.664
+Helsinki;Helsinki Rud 1;RUD;113.024
+Helsinki;Helsinki Rud 2;RUD;0
+Helsinki;Helsinki Rud 3;RUD;2.4
+Helsinki;Helsinki Rud 4;RUD;0
+Helsinki;Helsinki Rud 5;RUD;0.032
+Helsinki;Helsinki Ref 1;REF;1.344
+Helsinki;Helsinki Ref 2;REF;3.584
+Helsinki;Helsinki Ref 3;REF;16.352
+Helsinki;Helsinki Ref 4;REF;25.504
+Helsinki;Helsinki Ref 5;REF;0.064
