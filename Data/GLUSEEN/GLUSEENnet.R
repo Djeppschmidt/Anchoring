@@ -5,6 +5,9 @@ library(parallel)
 
 
 GLUFUN_RAW<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GLUSEEN/GLUSEENFungi_2020.RDS")
+# Export fungi for funguilds
+# f<-as.data.frame(as.matrix(tax_table(GLUFUN_RAW)))
+# write.csv(f, "/Users/dietrich/Documents/GitHub/Anchoring/Data/F_taxonomy.csv")
 GLUBac_RAW<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GLUSEEN/Bac16s_RAW.RDS")
 meta<-as.data.frame(as.matrix(sample_data(GLUBac_RAW)))
 
