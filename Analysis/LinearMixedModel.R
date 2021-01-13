@@ -10,38 +10,81 @@ library(ggplot2)
 library(dplyr)
 library(reshape2)
 
-d<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADbac2020.rds")
-fd<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADfun2020.rds")
+# d<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADbac2020.rds")
+# fd<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADfun2020.rds")
 
 # import fungal-bacterial dataset
+GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020.rds")
+GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020.rds")
+sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
+sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
 
+GAD.QScale<-function(ps, type){
+  
+  if(type=="B"){
+    scale<-as.numeric(as.character(sample_data(ps)$Bac_QPCR))
+    out<-Qscale(ps, val=1, scale)
+  }
+  if(type=="F"){
+    scale<-as.numeric(as.character(sample_data(ps)$Fun_QPCR))
+    out<-Qscale(ps, val=1, scale)
+  }
+  out
+}
+GAD.Qscale<-function(ps, val, scale){
+  scaled<-data.frame(mapply(`*`, data.frame(t(as.matrix(otu_table(transform_sample_counts(ps, function(x) x/sum(x)))))), scale * val))# sample_data(ps)$val))
+  names<-rownames(data.frame(t(as.matrix(otu_table(ps)))))
+  rownames(scaled)<-names
+  scaled<-round(scaled)
+  
+  p2<-ps
+  otu_table(p2)<- otu_table(scaled, taxa_are_rows=T)
+  p2
+  
+}
+
+# normalize by QPCR:
+fGA.Q<-GAD.QScale(GAD.Fun,type="F")
+bGA.Q<-GAD.QScale(GAD.bac,type="B")
+
+# filter uncommon species:
+
+<-filter_taxa(GPr, function(x) mean(x) > 1e-5, TRUE)
+
+bGA.Q<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+
+
+
+
+
+
+# steps for the anchoring study:
+#fGA.RA<-transform_sample_counts(GAD.Fun, function(x) x/sum(x))
+#bGA.RA<-transform_sample_counts(GAD.bac, function(x) x/sum(x))
+#GAD<-list(bGA.Q, bGA.RA, GAD.bac, fGA.Q, fGA.RA, GAD.Fun)
 
 # determined that order doesn't seem to make a difference
 # gaussian seems to get highest Rsquared
 # variance explained by each factor? 
 
 # FSP species abundance model:
-
-residualCor<-function(d){ 
+# experimental design
+taxmodel<-function(d){ 
   # input is phyloseq object
   # already normalized
-  d1<-as.data.frame(as.matrix(otu_table(d))) # dim =
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
   d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
   if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
   treatment<-as.factor(d2$Treatment)
   depth<-as.factor(d2$Depth)
-  pH<-as.numeric(as.character(d2$pH))
-  Cpercent<-as.numeric(as.character(d2$C_percent))
-  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
-  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
   out<-NULL
-  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate,family="gaussian"))))
-  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate,family="gaussian"))))
+  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ treatment*depth,family="gaussian"))))
+  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ treatment*depth,family="gaussian"))))
   out$fit<-list(1:length(ncol(d1)))
   colnames(out$predicted)<-colnames(d1)
   for(i in c(1:ncol(d1))){
   fit<-NULL
-  fit <- glm(d1[,i] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate,family="gaussian")
+  fit <- glm(d1[,i] ~ treatment*depth,family="gaussian")
 
   out$residuals[,i]<-residuals(fit)
   out$predicted[,i]<-predict(fit)
@@ -62,62 +105,141 @@ residualCor<-function(d){
   names(out$fit)<-colnames(d1)
   out
 }
-Sys.time()
-testcor<-residualCor(d)
-Sys.time()
+t1<-Sys.time()
+mtax.bac<-taxmodel(bGA.Q)
+Sys.time()-t1
 
-trt<-rep(NA, length(testcor$tab))
-for(i in c(1:length(testcor$tab))){
- trt[i]<-testcor$tab[[i]]$varExplained[1]
+trt<-rep(NA, length(mtax.bac$tab))
+for(i in c(1:length(mtax.bac$tab))){
+ trt[i]<-mtax.bac$tab[[i]]$varExplained[1]
 }
-hist(trt, main="Variance explained by Farming System")
+hist(trt, main="Percent var explained by Farming System")
 
-dep<-rep(NA, length(testcor$tab))
-for(i in c(1:length(testcor$tab))){
-  dep[i]<-testcor$tab[[i]]$varExplained[2]
+dep<-rep(NA, length(mtax.bac$tab))
+for(i in c(1:length(mtax.bac$tab))){
+  dep[i]<-mtax.bac$tab[[i]]$varExplained[2]
 }
-hist(dep, main="Variance explained by Depth")
+hist(dep, main="Percent var explained by Depth")
 
-p<-rep(NA, length(testcor$tab))
-for(i in c(1:length(testcor$tab))){
-  p[i]<-testcor$tab[[i]]$varExplained[3]
-}
-hist(p, main="Variance explained by pH")
-
-Cp<-rep(NA, length(testcor$tab))
-for(i in c(1:length(testcor$tab))){
-  Cp[i]<-testcor$tab[[i]]$varExplained[4]
-}
-hist(Cp, main="Variance explained by Carbon")
-
-No<-rep(NA, length(testcor$tab))
-for(i in c(1:length(testcor$tab))){
-  No[i]<-testcor$tab[[i]]$varExplained[6]
-}
-hist(No, main="Variance explained by Nitrate")
-
-Nh<-rep(NA, length(testcor$tab))
-for(i in c(1:length(testcor$tab))){
-  Nh[i]<-testcor$tab[[i]]$varExplained[5]
-}
-hist(Nh, main="Variance explained by Ammonium")
-
-deptrt<-rep(NA, length(testcor$tab))
-for(i in c(1:length(testcor$tab))){
-  deptrt[i]<-testcor$tab[[i]]$varExplained[7]
+deptrt<-rep(NA, length(mtax.bac$tab))
+for(i in c(1:length(mtax.bac$tab))){
+  deptrt[i]<-mtax.bac$tab[[i]]$varExplained[3]
 }
 hist(deptrt, main="Variance explained by interaction of farming system and depth")
 
-model<-rep(NA, length(testcor$tab))
-for(i in c(1:length(testcor$tab))){
-  model[i]<-sum(testcor$tab[[i]]$varExplained[1:7])
+model<-rep(NA, length(mtax.bac$tab))
+for(i in c(1:length(mtax.bac$tab))){
+  model[i]<-sum(mtax.bac$tab[[i]]$varExplained[1:3])
+}
+hist(model, main="Variance explained by all factors")
+
+
+stack<-matrix(data=NA, ncol=length(mtax.bac$tab), nrow=8)
+for(i in c(1:length(mtax.bac$tab))){
+  stack[,i]<-mtax.bac$tab[[i]]$varExplained
+}
+stack<-t(stack)
+colnames(stack)<-c("System", "Depth", "S-D interaction", "residual")
+rownames(stack)<-paste0("spp", 1:nrow(stack))
+stack<-data.frame(stack)
+stack$spp<-paste0("spp", 1:nrow(stack))
+stack[]
+stack<-melt(stack, id.vars=c("spp"))#, "System", "Depth", "pH", "Carbon", "Ammonium", "Nitrate", "S.D.interaction"))
+#lvl<-names(sort(tapply(stack$variable=="spp", stack$value, mean)))
+ggplot(stack, aes(x=spp, y=value, fill=variable))+geom_bar(position="fill", stat="identity")
+
+hist(sample(mtax.bac$predcor, 10000, replace=F), main="Exp. model correlation coefficients")
+hist(sample(mtax.bac$spcor, 10000, replace=F), main="Exp. species correlation coefficients")
+
+# environment model ####
+
+taxEnvmodel<-function(d){ 
+  # input is phyloseq object
+  # already normalized
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  pH<-as.numeric(as.character(d2$pH))
+  Cpercent<-as.numeric(as.character(d2$C_percent))
+  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  out<-NULL
+  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian"))))
+  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian"))))
+  out$fit<-list(1:length(ncol(d1)))
+  colnames(out$predicted)<-colnames(d1)
+  for(i in c(1:ncol(d1))){
+    fit<-NULL
+    fit <- glm(d1[,i] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian")
+    
+    out$residuals[,i]<-residuals(fit)
+    out$predicted[,i]<-predict(fit)
+    out$fit[[i]]<-fit
+    out$tab[[i]]<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+  }
+  out$predcor<-cor(out$predicted, use="pairwise.complete.obs")
+  out$spcor<-cor(d1, use="pairwise.complete.obs")
+  #out$hc<-hclust(out$cor, method="ward.D")
+  # regress for combined value of original data
+  # get residuals of the regression
+  # correlate the residuals
+  rownames(out$spcor)<-colnames(d1)
+  colnames(out$spcor)<-colnames(d1)
+  rownames(out$predcor)<-colnames(d1)
+  colnames(out$predcor)<-colnames(d1)
+  names(out$tab)<-colnames(d1)
+  names(out$fit)<-colnames(d1)
+  out
+}
+t1<-Sys.time()
+mtaxEnv.bac<-taxEnvmodel(bGA.Q)
+Sys.time()-t1
+
+p<-rep(NA, length(mtaxEnv.bac$tab))
+for(i in c(1:length(mtaxEnv.bac$tab))){
+  p[i]<-mtaxEnv.bac$tab[[i]]$varExplained[1]
+}
+hist(p, main="Percent var explained by pH")
+
+Cp<-rep(NA, length(mtaxEnv.bac$tab))
+for(i in c(1:length(mtaxEnv.bac$tab))){
+  Cp[i]<-mtaxEnv.bac$tab[[i]]$varExplained[2]
+}
+hist(Cp, main="Variance explained by Carbon")
+
+No<-rep(NA, length(mtaxEnv.bac$tab))
+for(i in c(1:length(mtaxEnv.bac$tab))){
+  No[i]<-mtaxEnv.bac$tab[[i]]$varExplained[4]
+}
+hist(No, main="Variance explained by Nitrate")
+
+Nh<-rep(NA, length(mtaxEnv.bac$tab))
+for(i in c(1:length(mtaxEnv.bac$tab))){
+  Nh[i]<-mtaxEnv.bac$tab[[i]]$varExplained[3]
+}
+hist(Nh, main="Variance explained by Ammonium")
+
+model<-rep(NA, length(mtaxEnv.bac$tab))
+for(i in c(1:length(mtaxEnv.bac$tab))){
+  model[i]<-sum(mtaxEnv.bac$tab[[i]]$varExplained[1:4])
 }
 hist(model, main="Variance explained by whole model")
 
+sp.model1<-rep(NA, length(mtaxEnv.bac$tab))
+#sp.model2<-rep(NA, length(mtaxEnv.bac$tab))
+for(i in c(1:length(mtaxEnv.bac$tab))){
+  sp.model1[i]<-sum(mtaxEnv.bac$tab[[i]]$varExplained[1:4])
+  #sp.model1[i]<-sum(mtaxEnv.bac$tab[[i]]$varExplained[1:4])
+}
+hist(sample(mtaxEnv.bac$predcor[sp.model1>60,sp.model1>60], 10000, replace=F), main="best model env correlation coefficients")
+hist(sample(mtaxEnv.bac$spcor[sp.model1>60,sp.model1>60], 10000, replace=F), main="best species env correlation coefficients")
+#hist(sp.model2[sp.model1>60], main="Variance explained by whole model")
 
-stack<-matrix(data=NA, ncol=length(testcor$tab), nrow=8)
-for(i in c(1:length(testcor$tab))){
-  stack[,i]<-testcor$tab[[i]]$varExplained
+# subset to high correlation of models
+
+stack<-matrix(data=NA, ncol=length(mtaxEnv.bac$tab), nrow=6)
+for(i in c(1:length(mtaxEnv.bac$tab))){
+  stack[,i]<-mtaxEnv.bac$tab[[i]]$varExplained
 }
 stack<-t(stack)
 colnames(stack)<-c("System", "Depth", "pH", "Carbon", "Ammonium", "Nitrate", "S-D interaction", "residual")
@@ -129,8 +251,9 @@ stack<-melt(stack, id.vars=c("spp"))#, "System", "Depth", "pH", "Carbon", "Ammon
 #lvl<-names(sort(tapply(stack$variable=="spp", stack$value, mean)))
 ggplot(stack, aes(x=spp, y=value, fill=variable))+geom_bar(position="fill", stat="identity")
 
-hist(testcor$predcor, main="model correlation coefficients")
-hist(testcor$spcor, main="species correlation coefficients")
+hist(sample(mtaxEnv.bac$predcor[mtaxEnv.bac$predcor<1], 10000, replace=F), main="model env correlation coefficients")
+hist(sample(mtaxEnv.bac$spcor[mtaxEnv.bac$spcor<1], 10000, replace=F), main="species env correlation coefficients")
+
 
 # heatmap
 
