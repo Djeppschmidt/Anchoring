@@ -105,6 +105,47 @@ taxmodel<-function(d){
   names(out$fit)<-colnames(d1)
   out
 }
+
+taxEnvmodel<-function(d){ 
+  # input is phyloseq object
+  # already normalized
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  pH<-as.numeric(as.character(d2$pH))
+  Cpercent<-as.numeric(as.character(d2$C_percent))
+  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  out<-NULL
+  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian"))))
+  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian"))))
+  out$fit<-list(1:length(ncol(d1)))
+  colnames(out$predicted)<-colnames(d1)
+  for(i in c(1:ncol(d1))){
+    fit<-NULL
+    fit <- glm(d1[,i] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian")
+    
+    out$residuals[,i]<-residuals(fit)
+    out$predicted[,i]<-predict(fit)
+    out$fit[[i]]<-fit
+    out$tab[[i]]<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+  }
+  out$predcor<-cor(out$predicted, use="pairwise.complete.obs")
+  out$spcor<-cor(d1, use="pairwise.complete.obs")
+  #out$hc<-hclust(out$cor, method="ward.D")
+  # regress for combined value of original data
+  # get residuals of the regression
+  # correlate the residuals
+  rownames(out$spcor)<-colnames(d1)
+  colnames(out$spcor)<-colnames(d1)
+  rownames(out$predcor)<-colnames(d1)
+  colnames(out$predcor)<-colnames(d1)
+  names(out$tab)<-colnames(d1)
+  names(out$fit)<-colnames(d1)
+  out
+}
+
+# bacteria ####
 t1<-Sys.time()
 mtax.bac<-taxmodel(bGA.Q)
 Sys.time()-t1
@@ -153,44 +194,7 @@ hist(sample(mtax.bac$spcor, 10000, replace=F), main="Exp. species correlation co
 
 # environment model ####
 
-taxEnvmodel<-function(d){ 
-  # input is phyloseq object
-  # already normalized
-  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
-  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
-  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
-  pH<-as.numeric(as.character(d2$pH))
-  Cpercent<-as.numeric(as.character(d2$C_percent))
-  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
-  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
-  out<-NULL
-  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian"))))
-  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian"))))
-  out$fit<-list(1:length(ncol(d1)))
-  colnames(out$predicted)<-colnames(d1)
-  for(i in c(1:ncol(d1))){
-    fit<-NULL
-    fit <- glm(d1[,i] ~ pH+Cpercent+Ammonia+Nitrate,family="gaussian")
-    
-    out$residuals[,i]<-residuals(fit)
-    out$predicted[,i]<-predict(fit)
-    out$fit[[i]]<-fit
-    out$tab[[i]]<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-  }
-  out$predcor<-cor(out$predicted, use="pairwise.complete.obs")
-  out$spcor<-cor(d1, use="pairwise.complete.obs")
-  #out$hc<-hclust(out$cor, method="ward.D")
-  # regress for combined value of original data
-  # get residuals of the regression
-  # correlate the residuals
-  rownames(out$spcor)<-colnames(d1)
-  colnames(out$spcor)<-colnames(d1)
-  rownames(out$predcor)<-colnames(d1)
-  colnames(out$predcor)<-colnames(d1)
-  names(out$tab)<-colnames(d1)
-  names(out$fit)<-colnames(d1)
-  out
-}
+
 t1<-Sys.time()
 mtaxEnv.bac<-taxEnvmodel(bGA.Q)
 Sys.time()-t1
@@ -260,9 +264,38 @@ hist(sample(mtaxEnv.bac$spcor[mtaxEnv.bac$spcor<1], 10000, replace=F), main="spe
 
 #scratch:
 ######################################
-
-
-
+sppInt<-function(d){
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  treatment<-as.factor(d2$Treatment)
+  depth<-as.factor(d2$Depth)
+  pH<-as.numeric(as.character(d2$pH))
+  Cpercent<-as.numeric(as.character(d2$C_percent))
+  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  out<-NULL
+  out$fit<-list(1:length(ncol(d1)))
+  s<-c(1:ncol(d1))
+  out$cor<-matrix(ncol=ncol(d1), nrow=ncol(d1))
+  for(i in c(1:ncol(d1))){
+    
+    for(k in s){
+      tax<-d1[,k]
+      fit<-NULL
+      fit <- glm(d1[,i] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax,family="gaussian")
+      tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+      out$cor[i,k]<-tab$varExplained[7]
+    }
+    
+  }
+  #rownames(out$cor)<-colnames(d1)
+  #colnames(out$cor)<-colnames(d1)
+  out
+}
+t1<-Sys.time()
+test<-sppInt(bGA.Q)
+Sys.time()-t1
 
 
 View(testcor$residuals[c(1:5), c(1:5)])
