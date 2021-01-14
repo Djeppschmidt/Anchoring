@@ -280,10 +280,8 @@ sppInt<-function(d){
   Cpercent<-as.numeric(as.character(d2$C_percent))
   Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
   Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
-  s<-c(1:ncol(d1))
-  out<-matrix(ncol=ncol(d1), nrow=ncol(d1))
-  rownames(out)<-colnames(d1)
-  colnames(out)<-colnames(d1)
+  
+  print("data set up")
   # prepare environment
   cores<-detectCores(logical=F)
   cores<-cores-1
@@ -292,23 +290,34 @@ sppInt<-function(d){
   chunk.size<-ncol(d1)/(cores)
   
   # run regressions in parallel
-  foreach(i=1:(cores), .combine="cbind", .inorder=T) %dopar% { 
+  out<-foreach(i=1:cores, .combine="cbind", .inorder=T) %dopar% { 
+    calc<-matrix(ncol=chunk.size, nrow=ncol(d1))
     for(x in ((i-1)*chunk.size+1):(i*chunk.size)){
       
-      for(y in s){
+      for(y in 1:ncol(d1)){
         tax<-d1[,y]
         fit<-NULL
         fit <- glm(d1[,x] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax,family="gaussian")
         tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-        out[y,x]<-tab$varExplained[7]
+        calc[y,x]<-tab$varExplained[7]
       }
-      
+      calc
     }
-    }
+  }
+  # shut down cluster
+  stopImplicitCluster()
+  stopCluster(cl)
+  
+  # return results
+  rownames(out)<-colnames(d1)
+  colnames(out)<-colnames(d1)
   out
-}
+  
 
-system.time(f.taxassoc<-sppInt(fGA.Q))
+}
+t1<-Sys.time()
+f.taxassoc<-sppInt(fGA.Q)
+Sys.time()-t1
 
 sppInt(fGA.Q)
 
