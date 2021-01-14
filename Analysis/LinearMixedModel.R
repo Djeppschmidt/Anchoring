@@ -9,6 +9,8 @@ library(lme4)
 library(ggplot2)
 library(dplyr)
 library(reshape2)
+library(doParallel)
+library(foreach)
 
 # d<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADbac2020.rds")
 # fd<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADfun2020.rds")
@@ -23,11 +25,11 @@ GAD.QScale<-function(ps, type){
   
   if(type=="B"){
     scale<-as.numeric(as.character(sample_data(ps)$Bac_QPCR))
-    out<-Qscale(ps, val=1, scale)
+    out<-GAD.Qscale(ps, val=1, scale)
   }
   if(type=="F"){
     scale<-as.numeric(as.character(sample_data(ps)$Fun_QPCR))
-    out<-Qscale(ps, val=1, scale)
+    out<-GAD.Qscale(ps, val=1, scale)
   }
   out
 }
@@ -49,11 +51,11 @@ bGA.Q<-GAD.QScale(GAD.bac,type="B")
 
 # filter uncommon species:
 
-<-filter_taxa(GPr, function(x) mean(x) > 1e-5, TRUE)
+#<-filter_taxa(GPr, function(x) mean(x) > 1e-5, TRUE)
 
 bGA.Q<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
 
-
+fGA.Q<-filter_taxa(fGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
 
 
 
@@ -265,6 +267,54 @@ hist(sample(mtaxEnv.bac$spcor[mtaxEnv.bac$spcor<1], 10000, replace=F), main="spe
 #scratch:
 ######################################
 sppInt<-function(d){
+  require(foreach)
+  require(doParallel)
+  require(phyloseq)
+  # prepare data
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  treatment<-as.factor(d2$Treatment)
+  depth<-as.factor(d2$Depth)
+  pH<-as.numeric(as.character(d2$pH))
+  Cpercent<-as.numeric(as.character(d2$C_percent))
+  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  s<-c(1:ncol(d1))
+  out<-matrix(ncol=ncol(d1), nrow=ncol(d1))
+  rownames(out)<-colnames(d1)
+  colnames(out)<-colnames(d1)
+  # prepare environment
+  cores<-detectCores(logical=F)
+  cores<-cores-1
+  cl<-makeCluster(cores)
+  registerDoParallel(cl,cores=cores)
+  chunk.size<-ncol(d1)/(cores)
+  
+  # run regressions in parallel
+  foreach(i=1:(cores), .combine="cbind", .inorder=T) %dopar% { 
+    for(x in ((i-1)*chunk.size+1):(i*chunk.size)){
+      
+      for(y in s){
+        tax<-d1[,y]
+        fit<-NULL
+        fit <- glm(d1[,x] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax,family="gaussian")
+        tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+        out[y,x]<-tab$varExplained[7]
+      }
+      
+    }
+    }
+  out
+}
+
+system.time(f.taxassoc<-sppInt(fGA.Q))
+
+sppInt(fGA.Q)
+
+
+
+sppInt<-function(d){
   d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
   d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
   if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
@@ -275,7 +325,6 @@ sppInt<-function(d){
   Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
   Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
   out<-NULL
-  out$fit<-list(1:length(ncol(d1)))
   s<-c(1:ncol(d1))
   out$cor<-matrix(ncol=ncol(d1), nrow=ncol(d1))
   for(i in c(1:ncol(d1))){
