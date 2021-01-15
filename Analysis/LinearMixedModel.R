@@ -11,16 +11,9 @@ library(dplyr)
 library(reshape2)
 library(doParallel)
 library(foreach)
+library(corrplot)
 
-# d<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADbac2020.rds")
-# fd<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADfun2020.rds")
-
-# import fungal-bacterial dataset
-GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020.rds")
-GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020.rds")
-sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
-sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
-
+# functions for processing samples:
 GAD.QScale<-function(ps, type){
   
   if(type=="B"){
@@ -44,33 +37,6 @@ GAD.Qscale<-function(ps, val, scale){
   p2
   
 }
-
-# normalize by QPCR:
-fGA.Q<-GAD.QScale(GAD.Fun,type="F")
-bGA.Q<-GAD.QScale(GAD.bac,type="B")
-
-# filter uncommon species:
-
-#<-filter_taxa(GPr, function(x) mean(x) > 1e-5, TRUE)
-
-bGA.Q<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
-
-fGA.Q<-filter_taxa(fGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
-
-
-
-
-# steps for the anchoring study:
-#fGA.RA<-transform_sample_counts(GAD.Fun, function(x) x/sum(x))
-#bGA.RA<-transform_sample_counts(GAD.bac, function(x) x/sum(x))
-#GAD<-list(bGA.Q, bGA.RA, GAD.bac, fGA.Q, fGA.RA, GAD.Fun)
-
-# determined that order doesn't seem to make a difference
-# gaussian seems to get highest Rsquared
-# variance explained by each factor? 
-
-# FSP species abundance model:
-# experimental design
 taxmodel<-function(d){ 
   # input is phyloseq object
   # already normalized
@@ -85,13 +51,13 @@ taxmodel<-function(d){
   out$fit<-list(1:length(ncol(d1)))
   colnames(out$predicted)<-colnames(d1)
   for(i in c(1:ncol(d1))){
-  fit<-NULL
-  fit <- glm(d1[,i] ~ treatment*depth,family="gaussian")
-
-  out$residuals[,i]<-residuals(fit)
-  out$predicted[,i]<-predict(fit)
-  out$fit[[i]]<-fit
-  out$tab[[i]]<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+    fit<-NULL
+    fit <- glm(d1[,i] ~ treatment*depth,family="gaussian")
+    
+    out$residuals[,i]<-residuals(fit)
+    out$predicted[,i]<-predict(fit)
+    out$fit[[i]]<-fit
+    out$tab[[i]]<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
   }
   out$predcor<-cor(out$predicted, use="pairwise.complete.obs")
   out$spcor<-cor(d1, use="pairwise.complete.obs")
@@ -146,6 +112,77 @@ taxEnvmodel<-function(d){
   names(out$fit)<-colnames(d1)
   out
 }
+get.no<-function(v){
+  tax1<-v
+  o<-c(rep(NA,length(d1)))
+  for(i in 1:length(d1)){
+    tax2<-NULL
+    fit<-NULL
+    tab<-NULL
+    tax2<-d1[,i]
+    fit <- glm(tax1 ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax2,family="gaussian")
+    tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+    o[i]<-tab$varExplained[7]
+  }
+  o
+}
+sppInt<-function(d){
+  require(foreach)
+  require(doParallel)
+  require(phyloseq)
+  # prepare data
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  treatment<-as.factor(d2$Treatment)
+  depth<-as.factor(d2$Depth)
+  pH<-as.numeric(as.character(d2$pH))
+  Cpercent<-as.numeric(as.character(d2$C_percent))
+  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  
+  # prepare environment
+  
+  out<-do.call(cbind, mclapply(d1, get.no, mc.preschedule = T, mc.cores=5, mc.cleanup = T))
+  # return results
+  rownames(out)<-colnames(out)
+  #colnames(out)<-colnames(d1)
+  out
+  
+  
+}
+# d<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADbac2020.rds")
+# fd<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADfun2020.rds")
+
+# import fungal-bacterial dataset
+GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020.rds")
+GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020.rds")
+sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
+sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
+
+
+
+# normalize by QPCR:
+fGA.Q<-GAD.QScale(GAD.Fun,type="F")
+bGA.Q<-GAD.QScale(GAD.bac,type="B")
+
+# filter uncommon species:
+
+#<-filter_taxa(GPr, function(x) mean(x) > 1e-5, TRUE)
+
+bGA.Q<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+
+fGA.Q<-filter_taxa(fGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+
+
+
+# determined that order doesn't seem to make a difference
+# gaussian seems to get highest Rsquared
+# variance explained by each factor? 
+
+# FSP species abundance model:
+# experimental design
+
 
 # bacteria ####
 t1<-Sys.time()
@@ -266,6 +303,40 @@ hist(sample(mtaxEnv.bac$spcor[mtaxEnv.bac$spcor<1], 10000, replace=F), main="spe
 
 #scratch:
 ######################################
+d1<-as.data.frame(t(as.matrix(otu_table(fGA.Q)))) 
+d2<-as.data.frame(as.matrix(sample_data(fGA.Q)))
+treatment<-as.factor(d2$Treatment)
+depth<-as.factor(d2$Depth)
+pH<-as.numeric(as.character(d2$pH))
+Cpercent<-as.numeric(as.character(d2$C_percent))
+Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+ # test mclapply
+v<-c(1:ncol(d1))
+names(v)<-colnames(d1)
+
+t1<-Sys.time()
+df2<-do.call(cbind, mclapply(d1, get.no, mc.preschedule = T, mc.cores=5, mc.cleanup = T))
+Sys.time-t1
+
+# mclapply function
+
+
+# test corplot output
+corrplot::corrplot(df2, method="color", 
+                   col=colorRampPalette(c("blue", "white", "green"))(200), 
+                   tl.ps="n",
+                   title="variance explained")
+
+# test dopar
+
+
+
+
+
+###########################################################
+
+
 sppInt<-function(d){
   require(foreach)
   require(doParallel)
@@ -281,28 +352,27 @@ sppInt<-function(d){
   Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
   Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
   
-  print("data set up")
   # prepare environment
   cores<-detectCores(logical=F)
   cores<-cores-1
   cl<-makeCluster(cores)
   registerDoParallel(cl,cores=cores)
   chunk.size<-ncol(d1)/(cores)
-  
+  #chunk<-c(1,round(chunk.size*1), round(chunk.size*2), round(chunk.size*3), round(chunk.size*4), round(chunk.size*5))
+  out<-matrix(ncol=nrow(d1), nrow=ncol(d1))
+  print("data set up")
   # run regressions in parallel
-  out<-foreach(i=1:cores, .combine="cbind", .inorder=T) %dopar% { 
-    calc<-matrix(ncol=chunk.size, nrow=ncol(d1))
+  # .combine="cbind"
+  foreach(i=1:cores,.combine="cbind", .inorder=T) %dopar% {
+    out<-matrix(ncol=chunk.size, nrow=nrow(d1))
     for(x in ((i-1)*chunk.size+1):(i*chunk.size)){
-      
       for(y in 1:ncol(d1)){
         tax<-d1[,y]
         fit<-NULL
-        fit <- glm(d1[,x] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax,family="gaussian")
+        fit <- glm(df[,x] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax,family="gaussian")
         tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-        calc[y,x]<-tab$varExplained[7]
-      }
-      calc
-    }
+        out[y,x]<-tab$varExplained[7]
+    }}
   }
   # shut down cluster
   stopImplicitCluster()
@@ -319,8 +389,29 @@ t1<-Sys.time()
 f.taxassoc<-sppInt(fGA.Q)
 Sys.time()-t1
 
-sppInt(fGA.Q)
-
+# simple foreach
+m<-matrix(nrow=10, ncol=20, rnorm(200,36, 10))
+cores<-detectCores(logical=F)
+cores<-cores-1
+cl<-makeCluster(cores)
+registerDoParallel(cl,cores=cores)
+chunk.size<-ncol(d1)/(cores)
+out<-foreach(i=1:cores,.combine="cbind", .inorder=T) %dopar% { 
+  df<-d1[,c(((i-1)*chunk[i]+1):chunk[i])]
+  o<-matrix(ncol=ncol(df), nrow=nrow(df))
+  for(x in 1:ncol(df)){
+    
+    for(y in 1:ncol(d1)){
+      tax<-d1[,y]
+      fit<-NULL
+      fit <- glm(df[,x] ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax,family="gaussian")
+      tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+      o[y,x]<-tab$varExplained[7]
+    }
+    
+  }
+  o
+}
 
 
 sppInt<-function(d){
