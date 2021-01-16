@@ -12,6 +12,8 @@ library(reshape2)
 library(doParallel)
 library(foreach)
 library(corrplot)
+library(vegan)
+library(igraph)
 
 # functions for processing samples:
 GAD.QScale<-function(ps, type){
@@ -122,7 +124,8 @@ get.no<-function(v){
     tax2<-d1[,i]
     fit <- glm(tax1 ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax2,family="gaussian")
     tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-    o[i]<-tab$varExplained[7]
+    o[i]<-tab$varExplained[7]*(fit$coefficients[8]/abs(fit$coefficients[8]))/100
+   
   }
   o
 }
@@ -142,10 +145,10 @@ sppInt<-function(d){
   Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
   
   # prepare environment
-  
-  out<-do.call(cbind, mclapply(d1, get.no, mc.preschedule = T, mc.cores=5, mc.cleanup = T))
+  # mc.cores=5,
+  out<-do.call(cbind, mclapply(d1, get.no, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
   # return results
-  rownames(out)<-colnames(out)
+  #rownames(out)<-colnames(out)
   #colnames(out)<-colnames(d1)
   out
   
@@ -160,33 +163,89 @@ GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020
 sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
 sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
 
-
-
 # normalize by QPCR:
 fGA.Q<-GAD.QScale(GAD.Fun,type="F")
 bGA.Q<-GAD.QScale(GAD.bac,type="B")
 
+# filter samples to top 4 levels
+fGA.Q<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="AP30")
+bGA.Q<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="AP30")
+
+# alpha diversity
+a.ffit<-lm(unlist(estimate_richness(fGA.Q, measures="Observed"))~sample_sums(fGA.Q))
+a.bfit<-lm(unlist(estimate_richness(bGA.Q, measures="Observed"))~sample_sums(bGA.Q))
+# sanity check
+f.meta<-as.data.frame(as.matrix(sample_data(fGA.Q)))
+identical(rownames(f.meta), rownames(estimate_richness(fGA.Q, measures="Observed")))
+resids<-a.ffit$residuals
+summary(aov(lm(resids~f.meta$Depth*f.meta$Treatment)))
+boxplot(resids~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Alpha Diversity")
+abline(h = 0, col = 'black', lty=c(2)) 
+
+b.meta<-as.data.frame(as.matrix(sample_data(bGA.Q)))
+identical(rownames(b.meta), rownames(estimate_richness(bGA.Q, measures="Observed")))
+resids<-a.bfit$residuals
+summary(aov(lm(resids~b.meta$Depth*b.meta$Treatment)))
+boxplot(resids~b.meta$Depth+b.meta$Treatment, las=2, xlab=NULL,cex.names=0.1, main="Bacterial Alpha Diversity")
+abline(h = 0, col = 'black', lty=c(2)) 
+
+# beta diversity / PERMANOVA
+f.meta$pH<-as.numeric(f.meta$pH)
+f.meta$C_percent<-as.numeric(f.meta$C_percent)
+f.meta$No3_ugPerg<-as.numeric(f.meta$No3_ugPerg)
+f.meta$Nh4_ugPerg<-as.numeric(f.meta$Nh4_ugPerg)
+f.meta$C_N_ratio<-as.numeric(f.meta$C_N_ratio)
+f.otu<-as.data.frame(t(as.matrix(otu_table(fGA.Q))))
+f.dist<-vegdist(f.otu, method="bray")
+adonis(f.dist~Depth+Treatment+C_N_ratio+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=f.meta, permutations = 999, method="bray")
+adonis(f.dist~C_N_ratio+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=f.meta, permutations = 999, method="bray")
+
+b.otu<-as.data.frame(as.matrix(otu_table(bGA.Q)))
+b.beta<-adonis(b.otu~Depth+Treatment+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=b.meta, permutations = 999, method="bray")
 # filter uncommon species:
 
-#<-filter_taxa(GPr, function(x) mean(x) > 1e-5, TRUE)
-
-bGA.Q<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
-
-fGA.Q<-filter_taxa(fGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
-
-
+bGA.Qf<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+fGA.Qf<-filter_taxa(fGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
 
 # determined that order doesn't seem to make a difference
 # gaussian seems to get highest Rsquared
 # variance explained by each factor? 
 
+# species interaction model:
+
+f.int<-sppInt(fGA.Qf)
+# not centroid or median or ward.D
+corrplot::corrplot(f.int, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="hclust",
+                   hclust.method = "average",
+                   tl.pos="n")
+
+t1<-Sys.time()
+b.int<-sppInt(bGA.Qf)
+Sys.time()-t1
 # FSP species abundance model:
 # experimental design
+# fungit
+t1<-Sys.time()
+mtax.fun<-taxmodel(fGA.Qf)
+Sys.time()-t1
+trt<-rep(NA, length(mtax.fun$tab))
+for(i in c(1:length(mtax.fun$tab))){
+  trt[i]<-mtax.fun$tab[[i]]$varExplained[1]
+}
+hist(trt, main="Variance explained by farming system")
+
+dep<-rep(NA, length(mtax.fun$tab))
+for(i in c(1:length(mtax.fun$tab))){
+  dep[i]<-mtax.fun$tab[[i]]$varExplained[2]
+}
+hist(dep, main="Variance explained by depth")
 
 
 # bacteria ####
 t1<-Sys.time()
-mtax.bac<-taxmodel(bGA.Q)
+mtax.bac<-taxmodel(bGA.Qf)
 Sys.time()-t1
 
 trt<-rep(NA, length(mtax.bac$tab))
@@ -303,8 +362,8 @@ hist(sample(mtaxEnv.bac$spcor[mtaxEnv.bac$spcor<1], 10000, replace=F), main="spe
 
 #scratch:
 ######################################
-d1<-as.data.frame(t(as.matrix(otu_table(fGA.Q)))) 
-d2<-as.data.frame(as.matrix(sample_data(fGA.Q)))
+d1<-as.data.frame(t(as.matrix(otu_table(fGA.Qf)))) 
+d2<-as.data.frame(as.matrix(sample_data(fGA.Qf)))
 treatment<-as.factor(d2$Treatment)
 depth<-as.factor(d2$Depth)
 pH<-as.numeric(as.character(d2$pH))
@@ -319,20 +378,18 @@ t1<-Sys.time()
 df2<-do.call(cbind, mclapply(d1, get.no, mc.preschedule = T, mc.cores=5, mc.cleanup = T))
 Sys.time-t1
 
-# mclapply function
+df2<-df2/100
 
-
+sum(df2[df2<0.3])
+hist(df2)
 # test corplot output
+plot.new()
+dev.off()
 corrplot::corrplot(df2, method="color", 
-                   col=colorRampPalette(c("blue", "white", "green"))(200), 
-                   tl.ps="n",
-                   title="variance explained")
-
-# test dopar
-
-
-
-
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="hclust",
+                   hclust.method = "ward.D2",
+                   tl.pos="n")
 
 ###########################################################
 
