@@ -10,6 +10,7 @@ library(ggplot2)
 library(dplyr)
 library(reshape2)
 library(doParallel)
+library(parallel)
 library(foreach)
 library(corrplot)
 library(vegan)
@@ -114,7 +115,7 @@ taxEnvmodel<-function(d){
   names(out$fit)<-colnames(d1)
   out
 }
-get.no<-function(v){
+get.no<-function(v, d2){
   tax1<-v
   o<-c(rep(NA,length(d1)))
   for(i in 1:length(d1)){
@@ -122,6 +123,12 @@ get.no<-function(v){
     fit<-NULL
     tab<-NULL
     tax2<-d1[,i]
+    treatment<-as.factor(d2$Treatment)
+    depth<-as.factor(d2$Depth)
+    pH<-as.numeric(as.character(d2$pH))
+    Cpercent<-as.numeric(as.character(d2$C_percent))
+    Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+    Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
     fit <- glm(tax1 ~ treatment*depth+pH+Cpercent+Ammonia+Nitrate+tax2,family="gaussian")
     tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
     o[i]<-tab$varExplained[7]*(fit$coefficients[8]/abs(fit$coefficients[8]))/100
@@ -137,16 +144,16 @@ sppInt<-function(d){
   d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
   d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
   if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
-  treatment<-as.factor(d2$Treatment)
-  depth<-as.factor(d2$Depth)
-  pH<-as.numeric(as.character(d2$pH))
-  Cpercent<-as.numeric(as.character(d2$C_percent))
-  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
-  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  #treatment<-as.factor(d2$Treatment)
+  #depth<-as.factor(d2$Depth)
+  #pH<-as.numeric(as.character(d2$pH))
+  #Cpercent<-as.numeric(as.character(d2$C_percent))
+  #Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  #Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
   
   # prepare environment
   # mc.cores=5,
-  out<-do.call(cbind, mclapply(d1, get.no, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
+  out<-do.call(cbind, mclapply(d1, get.no, d2, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
   # return results
   #rownames(out)<-colnames(out)
   #colnames(out)<-colnames(d1)
