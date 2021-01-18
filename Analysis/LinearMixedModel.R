@@ -153,7 +153,54 @@ sppInt<-function(d){
   
   # prepare environment
   # mc.cores=5,
-  out<-do.call(cbind, mclapply(d1, get.no, d2, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
+  out<-do.call(cbind, mclapply(d1, get.no, d2, d1, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
+  # return results
+  #rownames(out)<-colnames(out)
+  #colnames(out)<-colnames(d1)
+  out
+  
+  
+}
+
+get.no2<-function(v, d2, d1){
+  tax1<-v
+  o<-c(rep(NA,length(d1)))
+  for(i in 1:length(d1)){
+    tax2<-NULL
+    fit<-NULL
+    tab<-NULL
+    tax2<-d1[,i]
+    #treatment<-as.factor(d2$Treatment)
+    depth<-as.factor(d2$Depth)
+    pH<-as.numeric(as.character(d2$pH))
+    Cpercent<-as.numeric(as.character(d2$C_percent))
+    Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+    Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+    fit <- glm(tax1 ~ depth+pH+Cpercent+Ammonia+Nitrate+tax2,family="gaussian")
+    tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+    o[i]<-tab$varExplained[6]*(fit$coefficients[8]/abs(fit$coefficients[8]))/100
+    
+  }
+  o
+}
+sppInt2<-function(d){
+  require(foreach)
+  require(doParallel)
+  require(phyloseq)
+  # prepare data
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  #treatment<-as.factor(d2$Treatment)
+  #depth<-as.factor(d2$Depth)
+  #pH<-as.numeric(as.character(d2$pH))
+  #Cpercent<-as.numeric(as.character(d2$C_percent))
+  #Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  #Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  
+  # prepare environment
+  # mc.cores=5,
+  out<-do.call(cbind, mclapply(d1, get.no2, d2, d1, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
   # return results
   #rownames(out)<-colnames(out)
   #colnames(out)<-colnames(d1)
@@ -228,12 +275,67 @@ corrplot::corrplot(f.int, method="color",
                    hclust.method = "average",
                    tl.pos="n")
 
+hist(sample(f.int, 1000, replace=F))
+
+# full community assembly
 t1<-Sys.time()
 b.int<-sppInt(bGA.Qf)
 Sys.time()-t1
-# FSP species abundance model:
-# experimental design
-# fungit
+
+# by treatment!!
+# full community assembly
+bQ.NT<-subset_samples(bGA.Qf, Treatment=="NT")
+bQ.CT<-subset_samples(bGA.Qf, Treatment=="CT")
+bQ.ORG<-subset_samples(bGA.Qf, Treatment=="Org3")
+t1<-Sys.time()
+b.NTnet<-sppInt2(bQ.NT)
+b.CTnet<-sppInt2(bQ.CT)
+b.Org3net<-sppInt2(bQ.ORG)
+Sys.time()-t1
+
+b.associationSummary<-matrix(nrow=3, ncol=2)
+rownames(b.associationSummary)<-c("NT", "CT", "Org")
+colnames(b.associationSummary)<-c("Positive", "Negative")
+
+b.associationSummary[1,1]<-sum(b.NTnet>0.8 & b.NTnet<1)
+b.associationSummary[2,1]<-sum(b.CTnet>0.8 & b.CTnet<1)
+b.associationSummary[3,1]<-sum(b.ORGnet>0.8 & b.ORGnet<1)
+b.associationSummary[1,2]<-sum(-0.8>b.NTnet)
+b.associationSummary[2,2]<-sum(-0.8>b.CTnet)
+b.associationSummary[3,2]<-sum(-0.8>b.ORGnet)
+b.associationSummary
+
+fQ.NT<-subset_samples(fGA.Qf, Treatment=="NT")
+fQ.CT<-subset_samples(fGA.Qf, Treatment=="CT")
+fQ.ORG<-subset_samples(fGA.Qf, Treatment=="Org3")
+t1<-Sys.time()
+f.NTnet<-sppInt2(fQ.NT)
+f.CTnet<-sppInt2(fQ.CT)
+f.Org3net<-sppInt2(fQ.ORG)
+Sys.time()-t1
+
+f.associationSummary<-matrix(nrow=3, ncol=2)
+rownames(b.associationSummary)<-c("NT", "CT", "Org")
+colnames(b.associationSummary)<-c("Positive", "Negative")
+
+f.associationSummary[1,1]<-sum(f.NTnet>0.8 & f.NTnet<1)
+f.associationSummary[2,1]<-sum(f.CTnet>0.8 & f.CTnet<1)
+f.associationSummary[3,1]<-sum(f.ORGnet>0.8 & f.ORGnet<1)
+f.associationSummary[1,2]<-sum(-0.8>f.NTnet)
+f.associationSummary[2,2]<-sum(-0.8>f.CTnet)
+f.associationSummary[3,2]<-sum(-0.8>f.ORGnet)
+f.associationSummary
+
+corrplot::corrplot(b.int, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="hclust",
+                   hclust.method = "average",
+                   tl.pos="n")
+hist(sample(b.int, 1000, replace=F))
+
+# igraph network:
+
+# model species by farming system.
 t1<-Sys.time()
 mtax.fun<-taxmodel(fGA.Qf)
 Sys.time()-t1
@@ -242,6 +344,28 @@ for(i in c(1:length(mtax.fun$tab))){
   trt[i]<-mtax.fun$tab[[i]]$varExplained[1]
 }
 hist(trt, main="Variance explained by farming system")
+names(trt)<-names(mtax.fun$fit)
+f.taxtab<-as.data.frame(as.matrix(tax_table(fGA.Qf)))
+fs.tab<-subset(f.taxtab, rownames(f.taxtab) %in% names(trt[trt>30]))
+f.otutab<-as.data.frame(as.matrix(otu_table(fGA.Qf)))
+fs.otutab<-subset(f.otutab, rownames(f.otutab) %in% names(trt[trt>30]))
+sdat<-as.data.frame(as.matrix(sample_data(fGA.Qf)))
+identical(sdat$Sample, colnames(fs.otutab))
+boxplot(unlist(fs.otutab[rownames(fs.otutab)=="GTAAAAGTCGTAACAAGGTCTCCGTTGGTGAACCAGCGGAGGGATCATTACAGGACTCGCAAGACTCCTTAAACCCCTGTGAACTTACTGTTTATACGTTGCTTCGGCGGGTGCTCCGGGGTCCGCCCCGGGGCGCTGCGCCCGCCGGCAGCCTACTTAATTCTGTTTCTCTGCGTTGGCATCTCGAGTAAGCAAAATAAGTTAAAACTTTCAACAACGGATCTCTTGGTTCTGG",])~sdat$Depth+sdat$Treatment,las=2)
+
+
+
+# tax glom ...
+# boxplot ...
+View(fs.otutab)
+
+fs.ps<-phyloseq(otu_table(fs.otutab, taxa_are_rows = T), tax_table(as.matrix(fs.tab)), sample_data(fGA.Qf))
+p = plot_bar(fs.ps, x="Treatment", fill="Order", facet_grid="Depth")
+p + geom_bar(aes(color=Order, fill=Order), stat="identity", position="stack")
+
+glom<-subset_taxa(fs.ps, Order=="o__Glomerales")
+p2 = plot_bar(glom, x="Treatment", fill="Species", facet_grid="Depth")
+p2 + geom_bar(aes(color=Species, fill=Species), stat="identity", position="stack")
 
 dep<-rep(NA, length(mtax.fun$tab))
 for(i in c(1:length(mtax.fun$tab))){
@@ -382,7 +506,7 @@ v<-c(1:ncol(d1))
 names(v)<-colnames(d1)
 
 t1<-Sys.time()
-df2<-do.call(cbind, mclapply(d1, get.no, mc.preschedule = T, mc.cores=5, mc.cleanup = T))
+df2<-do.call(cbind, mclapply(d1, get.no, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
 Sys.time-t1
 
 df2<-df2/100
