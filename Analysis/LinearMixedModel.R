@@ -314,17 +314,51 @@ f.CTnet<-sppInt2(fQ.CT)
 f.Org3net<-sppInt2(fQ.ORG)
 Sys.time()-t1
 
+f.NTnet[is.na(f.NTnet)]<-0
+f.CTnet[is.na(f.CTnet)]<-0
+f.Org3net[is.na(f.Org3net)]<-0
+
 f.associationSummary<-matrix(nrow=3, ncol=2)
-rownames(b.associationSummary)<-c("NT", "CT", "Org")
-colnames(b.associationSummary)<-c("Positive", "Negative")
+rownames(f.associationSummary)<-c("NT", "CT", "Org")
+colnames(f.associationSummary)<-c("Positive", "Negative")
 
 f.associationSummary[1,1]<-sum(f.NTnet>0.8 & f.NTnet<1)
 f.associationSummary[2,1]<-sum(f.CTnet>0.8 & f.CTnet<1)
-f.associationSummary[3,1]<-sum(f.ORGnet>0.8 & f.ORGnet<1)
+f.associationSummary[3,1]<-sum(f.Org3net>0.8 & f.Org3net<1)
 f.associationSummary[1,2]<-sum(-0.8>f.NTnet)
 f.associationSummary[2,2]<-sum(-0.8>f.CTnet)
-f.associationSummary[3,2]<-sum(-0.8>f.ORGnet)
+f.associationSummary[3,2]<-sum(-0.8>f.Org3net)
 f.associationSummary
+
+f.associationSummary2<-matrix(nrow=3, ncol=2)
+rownames(f.associationSummary2)<-c("NT", "CT", "Org")
+colnames(f.associationSummary2)<-c("Positive", "Negative")
+
+f.associationSummary2[1,1]<-sum(f.NTnet>0.5 & f.NTnet<1)
+f.associationSummary2[2,1]<-sum(f.CTnet>0.5 & f.CTnet<1)
+f.associationSummary2[3,1]<-sum(f.Org3net>0.5 & f.Org3net<1)
+f.associationSummary2[1,2]<-sum(-0.5>f.NTnet)
+f.associationSummary2[2,2]<-sum(-0.5>f.CTnet)
+f.associationSummary2[3,2]<-sum(-0.5>f.Org3net)
+f.associationSummary2
+
+
+corrplot::corrplot(f.NTnet*((f.NTnet>0.5) + (-0.5 > f.NTnet)), method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="hclust",
+                   hclust.method = "average",
+                   tl.pos="n")
+corrplot::corrplot(f.CTnet, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="hclust",
+                   hclust.method = "average",
+                   tl.pos="n")
+corrplot::corrplot(f.Org3net, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="hclust",
+                   hclust.method = "average",
+                   tl.pos="n")
+
 
 corrplot::corrplot(b.int, method="color", 
                    col=colorRampPalette(c("red", "white", "blue"))(200), 
