@@ -16,6 +16,7 @@ library(corrplot)
 library(vegan)
 library(igraph)
 
+
 # functions for processing samples:
 GAD.QScale<-function(ps, type){
   
@@ -222,14 +223,16 @@ fGA.Q<-GAD.QScale(GAD.Fun,type="F")
 bGA.Q<-GAD.QScale(GAD.bac,type="B")
 
 # filter samples to top 4 levels
-fGA.Q<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="AP30")
-bGA.Q<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="AP30")
+fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="AP30") # rethink this!
+bGA.Ql<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="AP30")
 
 # alpha diversity
-a.ffit<-lm(unlist(estimate_richness(fGA.Q, measures="Observed"))~sample_sums(fGA.Q))
-a.bfit<-lm(unlist(estimate_richness(bGA.Q, measures="Observed"))~sample_sums(bGA.Q))
+a.ffit<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_sums(fGA.Ql))
+a.bfit<-lm(unlist(estimate_richness(bGA.Ql, measures="Observed"))~sample_sums(bGA.Ql))
 # sanity check
-f.meta<-as.data.frame(as.matrix(sample_data(fGA.Q)))
+f.meta<-as.data.frame(as.matrix(sample_data(fGA.Ql)))
+f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap"))
+f.meta$Treatment<-factor(f.meta$Treatment, levels=c("NT", "CT", "Org3"))
 identical(rownames(f.meta), rownames(estimate_richness(fGA.Q, measures="Observed")))
 resids<-a.ffit$residuals
 summary(aov(lm(resids~f.meta$Depth*f.meta$Treatment)))
@@ -237,6 +240,7 @@ boxplot(resids~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,mai
 abline(h = 0, col = 'black', lty=c(2)) 
 
 b.meta<-as.data.frame(as.matrix(sample_data(bGA.Q)))
+b.meta
 identical(rownames(b.meta), rownames(estimate_richness(bGA.Q, measures="Observed")))
 resids<-a.bfit$residuals
 summary(aov(lm(resids~b.meta$Depth*b.meta$Treatment)))
@@ -249,17 +253,42 @@ f.meta$C_percent<-as.numeric(f.meta$C_percent)
 f.meta$No3_ugPerg<-as.numeric(f.meta$No3_ugPerg)
 f.meta$Nh4_ugPerg<-as.numeric(f.meta$Nh4_ugPerg)
 f.meta$C_N_ratio<-as.numeric(f.meta$C_N_ratio)
-f.otu<-as.data.frame(t(as.matrix(otu_table(fGA.Q))))
+f.otu<-as.data.frame(t(as.matrix(otu_table(fGA.Ql))))
 f.dist<-vegdist(f.otu, method="bray")
 adonis(f.dist~Depth+Treatment+C_N_ratio+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=f.meta, permutations = 999, method="bray")
 adonis(f.dist~C_N_ratio+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=f.meta, permutations = 999, method="bray")
 
-b.otu<-as.data.frame(as.matrix(otu_table(bGA.Q)))
+b.otu<-as.data.frame(as.matrix(otu_table(bGA.Ql)))
 b.beta<-adonis(b.otu~Depth+Treatment+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=b.meta, permutations = 999, method="bray")
-# filter uncommon species:
 
-bGA.Qf<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
-fGA.Qf<-filter_taxa(fGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+# ignor bacteria for now []
+# subset taxa to depth and farming system
+
+fGA.Q.NT5<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="0_5")
+fGA.Q.NT10<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="5_10")
+fGA.Q.NTAp<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="10Ap")
+
+fGA.Q.CT5<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="0_5")
+fGA.Q.CT10<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="5_10")
+fGA.Q.CTAp<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="10Ap")
+
+fGA.Q.O5<-subset_samples(fGA.Q, Treatment=="Org3"&Depth=="0_5")
+fGA.Q.O10<-subset_samples(fGA.Q, Treatment=="Org3"&Depth=="5_10")
+fGA.Q.OAp<-subset_samples(fGA.Q, Treatment=="Org3"&Depth=="10Ap")
+
+# filter uncommon species:
+#bGA.Qf<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
+fGA.Q.NT5<-filter_taxa(fGA.Q.NT5, function(x) sum(x > 3) > 3, TRUE)
+fGA.Q.NT10<-filter_taxa(fGA.Q.NT10, function(x) sum(x > 3) > 3, TRUE)
+fGA.Q.NTAp<-filter_taxa(fGA.Q.NTAp, function(x) sum(x > 3) > 3, TRUE)
+
+fGA.Q.CT5<-filter_taxa(fGA.Q.CT5, function(x) sum(x > 3) > 3, TRUE)
+fGA.Q.CT10<-filter_taxa(fGA.Q.CT10, function(x) sum(x > 3) > 3, TRUE)
+fGA.Q.CTAp<-filter_taxa(fGA.Q.CTAp, function(x) sum(x > 3) > 3, TRUE)
+
+fGA.Q.O5<-filter_taxa(fGA.Q.O5, function(x) sum(x > 3) > 3, TRUE)
+fGA.Q.O10<-filter_taxa(fGA.Q.O10, function(x) sum(x > 3) > 3, TRUE)
+fGA.Q.OAp<-filter_taxa(fGA.Q.OAp, function(x) sum(x > 3) > 3, TRUE)
 
 # determined that order doesn't seem to make a difference
 # gaussian seems to get highest Rsquared
@@ -282,27 +311,35 @@ t1<-Sys.time()
 b.int<-sppInt(bGA.Qf)
 Sys.time()-t1
 
-# by treatment!!
+# by treatment and depth!!
 # full community assembly
 bQ.NT<-subset_samples(bGA.Qf, Treatment=="NT")
 bQ.CT<-subset_samples(bGA.Qf, Treatment=="CT")
 bQ.ORG<-subset_samples(bGA.Qf, Treatment=="Org3")
+
 t1<-Sys.time()
 b.NTnet<-sppInt2(bQ.NT)
+Sys.time()-t1
+t1<-Sys.time()
 b.CTnet<-sppInt2(bQ.CT)
+Sys.time()-t1
+t1<-Sys.time()
 b.Org3net<-sppInt2(bQ.ORG)
 Sys.time()-t1
 
+b.NTnet[is.na(b.NTnet)]<-0
+b.CTnet[is.na(b.CTnet)]<-0
+b.Org3net[is.na(b.Org3net)]<-0
 b.associationSummary<-matrix(nrow=3, ncol=2)
 rownames(b.associationSummary)<-c("NT", "CT", "Org")
 colnames(b.associationSummary)<-c("Positive", "Negative")
 
-b.associationSummary[1,1]<-sum(b.NTnet>0.8 & b.NTnet<1)
-b.associationSummary[2,1]<-sum(b.CTnet>0.8 & b.CTnet<1)
-b.associationSummary[3,1]<-sum(b.ORGnet>0.8 & b.ORGnet<1)
-b.associationSummary[1,2]<-sum(-0.8>b.NTnet)
-b.associationSummary[2,2]<-sum(-0.8>b.CTnet)
-b.associationSummary[3,2]<-sum(-0.8>b.ORGnet)
+b.associationSummary[1,1]<-sum(b.NTnet>0.5 & b.NTnet<1)
+b.associationSummary[2,1]<-sum(b.CTnet>0.5 & b.CTnet<1)
+b.associationSummary[3,1]<-sum(b.Org3net>0.5 & b.Org3net<1)
+b.associationSummary[1,2]<-sum(-0.5>b.NTnet)
+b.associationSummary[2,2]<-sum(-0.5>b.CTnet)
+b.associationSummary[3,2]<-sum(-0.5>b.Org3net)
 b.associationSummary
 
 fQ.NT<-subset_samples(fGA.Qf, Treatment=="NT")
@@ -348,16 +385,26 @@ corrplot::corrplot(f.NTnet*((f.NTnet>0.5) + (-0.5 > f.NTnet)), method="color",
                    order="hclust",
                    hclust.method = "average",
                    tl.pos="n")
-corrplot::corrplot(f.CTnet, method="color", 
+corrplot::corrplot(f.CTnet*((f.CTnet>0.5) + (-0.5 > f.CTnet)), method="color", 
                    col=colorRampPalette(c("red", "white", "blue"))(200), 
                    order="hclust",
                    hclust.method = "average",
                    tl.pos="n")
-corrplot::corrplot(f.Org3net, method="color", 
+corrplot::corrplot(f.Org3net*((f.Org3net>0.5) + (-0.5 > f.Org3net)), method="color", 
                    col=colorRampPalette(c("red", "white", "blue"))(200), 
                    order="hclust",
                    hclust.method = "average",
                    tl.pos="n")
+
+# igraph network
+
+c<-f.NTnet[((f.NTnet>0.7) + (-0.7 > f.NTnet))]
+sum(c)
+n<-graph_from_incidence_matrix(c, directed=T, mode="out")
+#cfg<-(n)
+
+plot(n, layout=layout.fruchterman.reingold.grid(n),
+     vertex.label=NA, main="NT", vertex.size=1)
 
 
 corrplot::corrplot(b.int, method="color", 
@@ -367,7 +414,6 @@ corrplot::corrplot(b.int, method="color",
                    tl.pos="n")
 hist(sample(b.int, 1000, replace=F))
 
-# igraph network:
 
 # model species by farming system.
 t1<-Sys.time()
@@ -400,6 +446,27 @@ p + geom_bar(aes(color=Order, fill=Order), stat="identity", position="stack")
 glom<-subset_taxa(fs.ps, Order=="o__Glomerales")
 p2 = plot_bar(glom, x="Treatment", fill="Species", facet_grid="Depth")
 p2 + geom_bar(aes(color=Species, fill=Species), stat="identity", position="stack")
+
+mort<-subset_taxa(fs.ps, Order=="o__Mortierellales")
+p3 = plot_bar(mort, x="Treatment", fill="Genus", facet_grid="Depth")
+p3 + geom_bar(aes(color=Genus, fill=Genus), stat="identity", position="stack")
+
+pip<-subset_taxa(fs.ps, Family=="f__Piptocephalidaceae")
+p4 = plot_bar(pip, x="Treatment", fill="Species", facet_grid="Depth")
+p4 + geom_bar(aes(color=Species, fill=Species), stat="identity", position="stack")
+
+hyp<-subset_taxa(fs.ps, Order=="o__Hypocreales")
+p5 = plot_bar(hyp, x="Treatment", fill="Species", facet_grid="Depth")
+p5 + geom_bar(aes(color=Species, fill=Species), stat="identity", position="stack")
+
+can<-subset_taxa(fs.ps, Order=="o__Cantharellales")
+#can<-subset_samples(can, sample_sums(can)!=0)
+p6 = plot_bar(can, x="Treatment", fill="Family", facet_grid="Depth")
+p6 + geom_bar(aes(color=Family, fill=Family), stat="identity", position="stack")
+
+ple<-subset_taxa(fs.ps, Order=="o__Pleosporales")
+p7 = plot_bar(ple, x="Treatment", fill="Family", facet_grid="Depth")
+p7 + geom_bar(aes(color=Family, fill=Family), stat="identity", position="stack")
 
 dep<-rep(NA, length(mtax.fun$tab))
 for(i in c(1:length(mtax.fun$tab))){
