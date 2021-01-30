@@ -177,9 +177,11 @@ get.no2<-function(v, d2, d1){
     Cpercent<-as.numeric(as.character(d2$C_percent))
     Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
     Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
-    fit <- glm(tax1 ~ depth+pH+Cpercent+Ammonia+Nitrate+tax2,family="gaussian")
+    Clay<-as.numeric(as.character(d2$Clay_percent))
+    Silt<-as.numeric(as.character(d2$Silt_percent))
+    fit <- glm(tax1 ~ depth+pH+Cpercent+Ammonia+Nitrate+Clay+Silt+tax2,family="gaussian")
     tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-    o[i]<-tab$varExplained[6]*(fit$coefficients[8]/abs(fit$coefficients[8]))/100
+    o[i]<-tab$varExplained[8]*(fit$coefficients[8]/abs(fit$coefficients[8]))/100
     
   }
   o
@@ -202,13 +204,72 @@ sppInt2<-function(d){
   # prepare environment
   # mc.cores=5,
   out<-do.call(cbind, mclapply(d1, get.no2, d2, d1, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
-  # return results
-  #rownames(out)<-colnames(out)
-  #colnames(out)<-colnames(d1)
+  rownames(out)<-colnames(out)
+  tm<-as.data.frame(as.matrix(tax_table(d)))
+  tmOrder<-rownames(tm) #tm$Class, tm$Order, 
+  if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+  tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+  out<-out[as.character(tmOrder1), as.character(tmOrder1)]
   out
   
   
 }
+
+get.no3<-function(v, d2, d1){
+  tax1<-v
+  o<-c(rep(NA,length(d1)))
+  for(i in 1:length(d1)){
+    tax2<-NULL
+    fit<-NULL
+    tab<-NULL
+    tax2<-d1[,i]
+    #treatment<-as.factor(d2$Treatment)
+    trt<-as.factor(d2$Treatment)
+    pH<-as.numeric(as.character(d2$pH))
+    Cpercent<-as.numeric(as.character(d2$C_percent))
+    Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+    Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+    Clay<-as.numeric(as.character(d2$Clay_percent))
+    Silt<-as.numeric(as.character(d2$Silt_percent))
+    fit <- glm(tax1 ~ trt+pH+Cpercent+Ammonia+Nitrate+Clay+Silt+tax2,family="gaussian")
+    tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+    o[i]<-tab$varExplained[8]*(fit$coefficients[8]/abs(fit$coefficients[8]))/100
+    
+  }
+  o
+}
+sppInt3<-function(d){
+  require(foreach)
+  require(doParallel)
+  require(phyloseq)
+  # prepare data
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  #treatment<-as.factor(d2$Treatment)
+  #depth<-as.factor(d2$Depth)
+  #pH<-as.numeric(as.character(d2$pH))
+  #Cpercent<-as.numeric(as.character(d2$C_percent))
+  #Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  #Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  
+  # prepare environment
+  # mc.cores=5,
+  out<-do.call(cbind, mclapply(d1, get.no3, d2, d1, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
+  # return results
+  
+  rownames(out)<-colnames(out)
+  tm<-as.data.frame(as.matrix(tax_table(d)))
+  tmOrder<-rownames(tm) #tm$Class, tm$Order, 
+  #print(rownames(d1)[1:5])
+  #print(as.character(tmOrder)[1:5])
+  if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+  tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+  out<-out[as.character(tmOrder1), as.character(tmOrder1)]
+  #colnames(out)<-colnames(d1)
+  out
+} # object returned ordered by taxonomy
+
 # d<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADbac2020.rds")
 # fd<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADfun2020.rds")
 
@@ -217,14 +278,16 @@ GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020
 GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020.rds")
 sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
 sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
+sample_data(GAD.Fun)$SampleDepth<-sample_data(GAD.Fun)$SeqDepth/sample_data(GAD.Fun)$Fun_QPCR
+# annotate fungi by fungal traits database 
 
 # normalize by QPCR:
 fGA.Q<-GAD.QScale(GAD.Fun,type="F")
 bGA.Q<-GAD.QScale(GAD.bac,type="B")
 
 # filter samples to top 4 levels
-fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="AP30") # rethink this!
-bGA.Ql<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="AP30")
+fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") # rethink this!
+bGA.Ql<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30")
 
 # alpha diversity
 a.ffit<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_sums(fGA.Ql))
@@ -236,6 +299,7 @@ f.meta$Treatment<-factor(f.meta$Treatment, levels=c("NT", "CT", "Org3"))
 identical(rownames(f.meta), rownames(estimate_richness(fGA.Q, measures="Observed")))
 resids<-a.ffit$residuals
 summary(aov(lm(resids~f.meta$Depth*f.meta$Treatment)))
+#boxplot
 boxplot(resids~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Alpha Diversity")
 abline(h = 0, col = 'black', lty=c(2)) 
 
@@ -244,6 +308,7 @@ b.meta
 identical(rownames(b.meta), rownames(estimate_richness(bGA.Q, measures="Observed")))
 resids<-a.bfit$residuals
 summary(aov(lm(resids~b.meta$Depth*b.meta$Treatment)))
+#boxplot:
 boxplot(resids~b.meta$Depth+b.meta$Treatment, las=2, xlab=NULL,cex.names=0.1, main="Bacterial Alpha Diversity")
 abline(h = 0, col = 'black', lty=c(2)) 
 
@@ -261,34 +326,142 @@ adonis(f.dist~C_N_ratio+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=f.meta, permuta
 b.otu<-as.data.frame(as.matrix(otu_table(bGA.Ql)))
 b.beta<-adonis(b.otu~Depth+Treatment+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=b.meta, permutations = 999, method="bray")
 
-# ignor bacteria for now []
-# subset taxa to depth and farming system
+# ignore bacteria for now []
+# subset taxa to depth and farming system does not work because it lacks power ...
 
-fGA.Q.NT5<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="0_5")
-fGA.Q.NT10<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="5_10")
-fGA.Q.NTAp<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="10Ap")
+fGA.Q.5<-subset_samples(fGA.Ql, Depth=="0_5")
+fGA.Q.10<-subset_samples(fGA.Ql, Depth=="5_10")
+fGA.Q.Ap<-subset_samples(fGA.Ql, Depth=="10Ap")
+fGA.Q.30<-subset_samples(fGA.Ql, Depth=="Ap30")
+fGA.Qf.5<-filter_taxa(fGA.Q.5, function(x) sum(x > 3) > 5, TRUE)
+fGA.Qf.10<-filter_taxa(fGA.Q.10, function(x) sum(x > 3) > 5, TRUE)
+fGA.Qf.Ap<-filter_taxa(fGA.Q.Ap, function(x) sum(x > 3) > 5, TRUE)
+fGA.Qf.30<-filter_taxa(fGA.Q.30, function(x) sum(x > 3) > 5, TRUE)
 
-fGA.Q.CT5<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="0_5")
-fGA.Q.CT10<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="5_10")
-fGA.Q.CTAp<-subset_samples(fGA.Q, Treatment=="NT"&Depth=="10Ap")
+#fGA.Q.5<-phyloseq::index_reorder(fGA.Q.5, index_type="both")
 
-fGA.Q.O5<-subset_samples(fGA.Q, Treatment=="Org3"&Depth=="0_5")
-fGA.Q.O10<-subset_samples(fGA.Q, Treatment=="Org3"&Depth=="5_10")
-fGA.Q.OAp<-subset_samples(fGA.Q, Treatment=="Org3"&Depth=="10Ap")
+t1<-Sys.time()
+f.5net<-sppInt3(fGA.Qf.5)
+f.10net<-sppInt3(fGA.Qf.10)
+f.Anet<-sppInt3(fGA.Qf.Ap)
+f.30net<-sppInt3(fGA.Qf.30)
+Sys.time()-t1
 
-# filter uncommon species:
-#bGA.Qf<-filter_taxa(bGA.Q, function(x) sum(x > 3) > (0.2*length(x)), TRUE)
-fGA.Q.NT5<-filter_taxa(fGA.Q.NT5, function(x) sum(x > 3) > 3, TRUE)
-fGA.Q.NT10<-filter_taxa(fGA.Q.NT10, function(x) sum(x > 3) > 3, TRUE)
-fGA.Q.NTAp<-filter_taxa(fGA.Q.NTAp, function(x) sum(x > 3) > 3, TRUE)
+f.5net[is.na(f.5net)]<-0
+f.10net[is.na(f.10net)]<-0
+f.Anet[is.na(f.Anet)]<-0
+f.30net[is.na(f.30net)]<-0
 
-fGA.Q.CT5<-filter_taxa(fGA.Q.CT5, function(x) sum(x > 3) > 3, TRUE)
-fGA.Q.CT10<-filter_taxa(fGA.Q.CT10, function(x) sum(x > 3) > 3, TRUE)
-fGA.Q.CTAp<-filter_taxa(fGA.Q.CTAp, function(x) sum(x > 3) > 3, TRUE)
+fD.associationSummary<-matrix(nrow=4, ncol=2)
+rownames(fD.associationSummary)<-c("D5", "D10", "DAp", "D30")
+colnames(fD.associationSummary)<-c("Positive", "Negative")
 
-fGA.Q.O5<-filter_taxa(fGA.Q.O5, function(x) sum(x > 3) > 3, TRUE)
-fGA.Q.O10<-filter_taxa(fGA.Q.O10, function(x) sum(x > 3) > 3, TRUE)
-fGA.Q.OAp<-filter_taxa(fGA.Q.OAp, function(x) sum(x > 3) > 3, TRUE)
+fD.associationSummary[1,1]<-sum(f.5net>0.5 & f.5net<1)
+fD.associationSummary[2,1]<-sum(f.10net>0.5 & f.10net<1)
+fD.associationSummary[3,1]<-sum(f.Anet>0.5 & f.Anet<1)
+fD.associationSummary[4,1]<-sum(f.30net>0.5 & f.30net<1)
+fD.associationSummary[1,2]<-sum(-0.5>f.5net)
+fD.associationSummary[2,2]<-sum(-0.5>f.10net)
+fD.associationSummary[3,2]<-sum(-0.5>f.Anet)
+fD.associationSummary[4,2]<-sum(-0.5>f.30net)
+fD.associationSummary
+# test some hclust methods for dendrogram
+
+corrplot::corrplot(f.5net, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="top 5 cm")
+corrplot::corrplot(f.10net, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="5-10 cm")
+corrplot::corrplot(f.Anet, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="10-Ap cm")
+corrplot::corrplot(f.30net, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="Ap-30 cm")
+
+
+
+fQ.NT<-subset_samples(fGA.Ql, Treatment=="NT")
+fQ.CT<-subset_samples(fGA.Ql, Treatment=="CT")
+fQ.ORG<-subset_samples(fGA.Ql, Treatment=="Org3")
+fQ.NTf<-filter_taxa(fQ.NT, function(x) sum(x > 3) > 5, TRUE)
+fQ.CTf<-filter_taxa(fQ.CT, function(x) sum(x > 3) > 5, TRUE)
+fQ.ORGf<-filter_taxa(fQ.ORG, function(x) sum(x > 3) > 5, TRUE)
+t1<-Sys.time()
+f.NTnet<-sppInt2(fQ.NTf)
+f.CTnet<-sppInt2(fQ.CTf)
+f.Org3net<-sppInt2(fQ.ORGf)
+Sys.time()-t1
+
+f.NTnet[is.na(f.NTnet)]<-0
+f.CTnet[is.na(f.CTnet)]<-0
+f.Org3net[is.na(f.Org3net)]<-0
+
+fFS.associationSummary<-matrix(nrow=3, ncol=2)
+rownames(fFS.associationSummary)<-c("NT", "CT", "Org")
+colnames(fFS.associationSummary)<-c("Positive", "Negative")
+
+fFS.associationSummary[1,1]<-sum(f.NTnet>0.5 & f.NTnet<1)
+fFS.associationSummary[2,1]<-sum(f.CTnet>0.5 & f.CTnet<1)
+fFS.associationSummary[3,1]<-sum(f.Org3net>0.5 & f.Org3net<1)
+fFS.associationSummary[1,2]<-sum(-0.5>f.NTnet)
+fFS.associationSummary[2,2]<-sum(-0.5>f.CTnet)
+fFS.associationSummary[3,2]<-sum(-0.5>f.Org3net)
+fFS.associationSummary
+
+#f.associationSummary2<-matrix(nrow=3, ncol=2)
+#rownames(f.associationSummary2)<-c("NT", "CT", "Org")
+#colnames(f.associationSummary2)<-c("Positive", "Negative")
+
+corrplot::corrplot(f.NTnet, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="NT")
+corrplot::corrplot(f.CTnet, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="CT")
+corrplot::corrplot(f.Org3net, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="Org3")
+
+# omit 30-60 depth because there are not enough samples
+# do grouped analysis by depth and by treatment for adequate coverage.
+# test space for glm
+df1<-as.data.frame(t(as.matrix(otu_table(fGA.Q.O5))))
+df2<-as.data.frame(as.matrix(sample_data(fGA.Q.O5)))
+p<-df2$pH
+c<-df2$C_percent
+n1<-df2$No3_ugPerg
+n2<-df2$Nh4_ugPerg
+t2<-df1[,1]
+t1<-df1[,5]
+
+oy<-glm(t1~p+c+n1+n2+t2)
+summary(oy)
+
+
+f.int<-sppInt(fGA.Qf)
 
 # determined that order doesn't seem to make a difference
 # gaussian seems to get highest Rsquared
@@ -313,9 +486,10 @@ Sys.time()-t1
 
 # by treatment and depth!!
 # full community assembly
-bQ.NT<-subset_samples(bGA.Qf, Treatment=="NT")
-bQ.CT<-subset_samples(bGA.Qf, Treatment=="CT")
-bQ.ORG<-subset_samples(bGA.Qf, Treatment=="Org3")
+bQ.NT<-subset_samples(bGA.Ql, Treatment=="NT")
+bQ.CT<-subset_samples(bGA.Ql, Treatment=="CT")
+bQ.ORG<-subset_samples(bGA.Ql, Treatment=="Org3")
+
 
 t1<-Sys.time()
 b.NTnet<-sppInt2(bQ.NT)
@@ -342,34 +516,7 @@ b.associationSummary[2,2]<-sum(-0.5>b.CTnet)
 b.associationSummary[3,2]<-sum(-0.5>b.Org3net)
 b.associationSummary
 
-fQ.NT<-subset_samples(fGA.Qf, Treatment=="NT")
-fQ.CT<-subset_samples(fGA.Qf, Treatment=="CT")
-fQ.ORG<-subset_samples(fGA.Qf, Treatment=="Org3")
-t1<-Sys.time()
-f.NTnet<-sppInt2(fQ.NT)
-f.CTnet<-sppInt2(fQ.CT)
-f.Org3net<-sppInt2(fQ.ORG)
-Sys.time()-t1
 
-f.NTnet[is.na(f.NTnet)]<-0
-f.CTnet[is.na(f.CTnet)]<-0
-f.Org3net[is.na(f.Org3net)]<-0
-
-f.associationSummary<-matrix(nrow=3, ncol=2)
-rownames(f.associationSummary)<-c("NT", "CT", "Org")
-colnames(f.associationSummary)<-c("Positive", "Negative")
-
-f.associationSummary[1,1]<-sum(f.NTnet>0.8 & f.NTnet<1)
-f.associationSummary[2,1]<-sum(f.CTnet>0.8 & f.CTnet<1)
-f.associationSummary[3,1]<-sum(f.Org3net>0.8 & f.Org3net<1)
-f.associationSummary[1,2]<-sum(-0.8>f.NTnet)
-f.associationSummary[2,2]<-sum(-0.8>f.CTnet)
-f.associationSummary[3,2]<-sum(-0.8>f.Org3net)
-f.associationSummary
-
-f.associationSummary2<-matrix(nrow=3, ncol=2)
-rownames(f.associationSummary2)<-c("NT", "CT", "Org")
-colnames(f.associationSummary2)<-c("Positive", "Negative")
 
 f.associationSummary2[1,1]<-sum(f.NTnet>0.5 & f.NTnet<1)
 f.associationSummary2[2,1]<-sum(f.CTnet>0.5 & f.CTnet<1)
