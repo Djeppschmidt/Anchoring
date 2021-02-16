@@ -449,7 +449,25 @@ GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020
 sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
 sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
 sample_data(GAD.Fun)$SampleDepth<-sample_data(GAD.Fun)$SeqDepth/sample_data(GAD.Fun)$Fun_QPCR
+tt1<-as.data.frame(as.matrix(tax_table(GAD.Fun)))
+sum(is.na(tt1$Species))/nrow(tt1) # 75 % unknown to species
+sum(is.na(tt1$Genus))/nrow(tt1) # 62 % unknown to genus
+sum(is.na(tt1$Family))/nrow(tt1) # 56 % unknown to family
+sum(is.na(tt1$Order))/nrow(tt1) # 50 % unknown to order
+sum(is.na(tt1$Class))/nrow(tt1) # 46 % unknown to class
+
+# if I keep unknown spp by pasting genus; aggregate to spp, I lose 6% compared to aggregating to family and 12%$ compared to aggregating to order (16% aggregated to class level). Class and above are more likely to be random amplification targets.
+GAD.Fun.nf<-GAD.Fun
+GAD.Fun.nf<-subset_samples(GAD.Fun.nf, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") # dataset that is not taxa filtered (compare overarching patterns vs completely subset dataset)
+
+GAD.Fun<-tax_glom(GAD.Fun, taxrank="Genus")
+tt1<-as.data.frame(as.matrix(tax_table(GAD.Fun)))
+tt1$Species[is.na(tt1$Species)]<-paste(tt1$Genus[is.na(tt1$Species)], "Undefined")
+tax_table(GAD.Fun)<-tax_table(as.matrix(tt1))
+
+
 GAD.Fun<-tax_glom(GAD.Fun, taxrank="Species")
+
 # annotate fungi by fungal traits database 
 fungalTraits<-read.csv("/Users/dietrich/Documents/GitHub/Plant-Health-Project/Analysis/Data/FungalTraits2021.csv")
 View(fungalTraits)
@@ -463,18 +481,18 @@ tt2<-tt2[,-c(8:13,16,21,25,29:31)] # remove columns not being used in the analys
 tax_table(GAD.Fun)<-tax_table(as.matrix(tt2))
 # normalize by QPCR:
 fGA.Q<-GAD.QScale(GAD.Fun,type="F")
+fGA.Qnf<-GAD.QScale(GAD.Fun.nf, type="F")
 bGA.Q<-GAD.QScale(GAD.bac,type="B")
 
 # filter samples to top 4 levels
-fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") # rethink this!
+fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") 
 bGA.Ql<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30")
 
 # alpha diversity
 a.ffit<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_data(fGA.Ql)$SeqDepth)
 #a.bfit<-lm(unlist(estimate_richness(bGA.Ql, measures="Observed"))~sample_sums(bGA.Ql))
-a.ffit2<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_data(fGA.Ql)$SampleDepth) # by relative sampling effort
-summary(aov(a.ffit))  # by seq depth = 23% of variance explained; at spp 18.5%
-summary(aov(a.ffit2)) # by sampleing effort = 37.4% of variance explained; at spp 29.8%
+summary(aov(a.ffit))  # by seq depth = 17.8% of variance explained at spp level
+
 
 
 # sanity check
@@ -493,20 +511,25 @@ identical(rownames(f.meta), rownames(estimate_richness(fGA.Ql, measures="Observe
 resids<-a.ffit$residuals
 alphadiveffect<-summary(aov(lm(resids~f.meta$Depth*f.meta$Treatment)))
 #boxplot
-boxplot(resids~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Alpha Diversity")
+boxplot(resids~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Alpha Diversity", ylab="Sequencing Depth Residual", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
 abline(h = 0, col = 'black', lty=c(2)) 
 
-# just sequencing effort:
+# just sequencing effort (for dissertation):
+a.ffit2<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_data(fGA.Ql)$SampleDepth) # by relative sampling effort
+summary(aov(a.ffit2)) # by sampleing effort = 24.1% of variance explained
 resids2<-a.ffit2$residuals
 alphadiveffect2<-summary(aov(lm(resids2~f.meta$Depth*f.meta$Treatment)))
 #boxplot
-boxplot(resids2~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Alpha Diversity")
+boxplot(resids2~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Alpha Diversity", ylab="Sampling Effort Residual", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
 abline(h = 0, col = 'black', lty=c(2)) 
-
-
 # partitioning of residual variance:
-(100-22.5)*alphadiveffect[[1]]$`Sum Sq`/sum(alphadiveffect[[1]]$`Sum Sq`) # sampling effort
-(100-29.8)*alphadiveffect2[[1]]$`Sum Sq`/sum(alphadiveffect2[[1]]$`Sum Sq`) # sampling depth
+# 17.8, 24.1 each comes from variance explained by the model
+divVar<-data.frame("SeqDepth"=(100-17.8)*alphadiveffect[[1]]$`Sum Sq`/sum(alphadiveffect[[1]]$`Sum Sq`), "SampleEffort"=(100-24.1)*alphadiveffect2[[1]]$`Sum Sq`/sum(alphadiveffect2[[1]]$`Sum Sq`))
+rownames(divVar)<-c("Depth", "Farming System", "Interaction", "Residual")
+divVar
+
+# add biodiversity not filtered
+
 
 # test sources of alph diversity by funcitonal guild
 # what does alpha diversity mean in an organic farming system?
@@ -516,7 +539,6 @@ p.path<-subset_taxa(fGA.Ql, primary_lifestyle=="plant_pathogen")
 soil.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="soil_saprotroph")
 an.par<-subset_taxa(fGA.Ql, primary_lifestyle=="animal_parasite")
 wood.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="wood_saprotroph")
-unknown<-subset_taxa(fGA.Ql, primary_lifestyle=="NA")
 myco.par<-subset_taxa(fGA.Ql, primary_lifestyle=="mycoparasite")
 unsp.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="unspecified_saprotroph")
 litter.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="litter_saprotroph")
@@ -575,59 +597,59 @@ div.df<-data.frame(p.path.r,
                    "treatment"= f.meta$Treatment,
                    "seqs"=as.numeric(as.character(f.meta$SeqDepth)))
 
-with(div.df,boxplot(p.path.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(p.path.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Plant Pathogen Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(p.path.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(soil.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(soil.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Soil Saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(soil.sap.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(an.par.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(an.par.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Animal Parasite Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(an.par.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(wood.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(wood.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Wood Saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(wood.sap.r~seqs+depth*treatment))))
 
 
 #unique(as.data.frame(as.matrix(tax_table(fGA.Ql)))$primary_lifestyle)
 #estimate_richness(fGA.Ql, measures="Observed")
 
-with(div.df,boxplot(myco.par.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(myco.par.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Mycoparasite Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(myco.par.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(unsp.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(unsp.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Unspecified Saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(unsp.sap.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(litter.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(litter.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Litter Saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(litter.sap.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(dung.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(dung.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Dung Saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(dung.sap.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(AMF.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(AMF.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="AMF Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(AMF.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(fol.end.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(fol.end.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Foliar Endophyte Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(fol.end.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(pollen.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(pollen.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Pollen Saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(pollen.sap.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(lich.par.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(lich.par.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Lichen Parasite Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(lich.par.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(ECM.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(ECM.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="ECM Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(ECM.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(unsp.path.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(unsp.path.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Unspecified Pathogen Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(unsp.path.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(epi.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(epi.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Epiphite Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(epi.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(alg.par.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(alg.par.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Algal Parasite Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(alg.par.r~seqs+depth*treatment))))
 
-with(div.df,boxplot(soot.mold.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1))
+with(div.df,boxplot(soot.mold.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Soot Mold Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(soot.mold.r~seqs+depth*treatment))))
 
 # table of mean (+/- se) for diversity for groups
@@ -826,24 +848,40 @@ corrplot::corrplot(f.Org3net, method="color",
                    tl.pos="n",
                    title="Org3")
 
+# network analysis!!!n####
+colrs<-c("#FF0000", "#FF9900", "#CCFF00", "#33FF00", "#00FF66", "#00FFFF", "#0066FF", "#3300FF", "#CC00FF", "#FF0099","#4DAF4A", "#7FC97F", "#7570B3", "#CCCCCC")
+group<-as.data.frame(as.matrix(tax_table(fQ.NTf)))$primary_lifestyle
 c<-f.NTnet*(f.NTnet>0.3 + (-0.3 > f.NTnet))
 sum(c)
 n<-graph_from_incidence_matrix(c, directed=T, mode="out")
 #cfg<-(n)
+V(n)$color<-colrs[as.factor(group)]
 
-plot(n, layout=layout.fruchterman.reingold.grid(n),
-     vertex.label=NA, main="NT", vertex.size=1)
+n<-delete.vertices(simplify(n), degree(n)==0)
+l<-layout_with_dh(n)
+l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
+plot(n,vertex.label=NA, main="NT", vertex.size=5, edge.arrow.size=0.5, 
+     #rescale=F, 
+     layout=l,
+     vertex.color=colrs[as.factor(group)])
+
 
 c2<-f.CTnet*(f.CTnet>0.3 + (-0.3 > f.CTnet))
 sum(c2)
 n2<-graph_from_incidence_matrix(c2, directed=T, mode="out")
 
 #cfg<-(n)
+n2<-delete.vertices(simplify(n2), degree(n2)==0)
+l<-layout_with_dh(n2)
+l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
+plot(n2,vertex.label=NA, main="CT", vertex.size=5, edge.arrow.size=0.5, 
+     #rescale=F, 
+     layout=l)
 
-plot(n2, layout=layout.fruchterman.reingold.grid(n2),
-     vertex.label=NA, main="CT", vertex.size=1)
-V(n2)$name
-
+closeness(n2)
+hist(degree(n2))
+tc <- cluster_walktrap(n2)
+modularity(n2, unlist(tc))
 
 c3<-f.Org3net*(f.Org3net>0.3 + (-0.3 > f.Org3net))
 sum(c3)
@@ -874,7 +912,64 @@ n.guild.int.O3<-ismatrix(f.Org3fs, fQ.ORGf, "N")
 
 fGA.Qlf<-filter_taxa(fGA.Ql, function(x) sum(x > 3) > 5, TRUE)
 
+mp.path<-subset_taxa(fGA.Qlf, primary_lifestyle=="plant_pathogen")
+msoil.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="soil_saprotroph")
+man.par<-subset_taxa(fGA.Qlf, primary_lifestyle=="animal_parasite")
+mwood.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="wood_saprotroph")
+#munknown<-subset_taxa(fGA.Qlf, primary_lifestyle=="NA")
+mmyco.par<-subset_taxa(fGA.Qlf, primary_lifestyle=="mycoparasite")
+munsp.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="unspecified_saprotroph")
+mlitter.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="litter_saprotroph")
+mdung.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="dung_saprotroph")
+mAMF<-subset_taxa(fGA.Qlf, primary_lifestyle=="arbuscular_mycorrhizal")
+mfol.end<-subset_taxa(fGA.Qlf, primary_lifestyle=="foliar_endophyte")
+mnect.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="nectar/tap_saprotroph")
+mpollen.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="pollen_saprotroph")
+mlich.par<-subset_taxa(fGA.Qlf, primary_lifestyle=="lichen_parasite")
+mECM<-subset_taxa(fGA.Qlf, primary_lifestyle=="ectomycorrhizal")
+munsp.path<-subset_taxa(fGA.Qlf, primary_lifestyle=="unspecified_pathotroph")
+mepi<-subset_taxa(fGA.Qlf, primary_lifestyle=="epiphyte")
+malg.par<-subset_taxa(fGA.Qlf, primary_lifestyle=="algal_parasite")
+msoot.mold<-subset_taxa(fGA.Qlf, primary_lifestyle=="sooty_mold")
 
+# sample sums by category
+maineffects<-function(ps){
+  f.meta<-as.data.frame(as.matrix(sample_data(ps)))
+  f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
+  f.meta$Treatment<-factor(f.meta$Treatment, levels=c("NT", "CT", "Org3"))
+  f.meta$pH<-as.numeric(as.character(f.meta$pH))
+  f.meta$C_percent<-as.numeric(as.character(f.meta$C_percent))
+  f.meta$No3_ugPerg<-as.numeric(as.character(f.meta$No3_ugPerg))
+  f.meta$Nh4_ugPerg<-as.numeric(as.character(f.meta$Nh4_ugPerg))
+  f.meta$C_N_ratio<-as.numeric(as.character(f.meta$C_N_ratio))
+  f.meta$Clay_percent<-as.numeric(as.character(f.meta$Clay_percent))
+  f.meta$Silt_percent<-as.numeric(as.character(f.meta$Silt_percent))
+  f.meta$SeqDepth<-as.numeric(as.character(f.meta$SeqDepth))
+  
+  print(summary(aov(glm(unlist(sample_sums(ps))~f.meta$SeqDepth+f.meta$Depth*f.meta$Treatment+f.meta$pH+f.meta$pH+f.meta$C_percent+f.meta$No3_ugPerg+f.meta$Nh4_ugPerg+f.meta$C_N_ratio+f.meta$Clay_percent+f.meta$Silt_percent))))
+  
+  boxplot(unlist(sample_sums(ps))~f.meta$Depth*f.meta$Treatment,las=2, xlab=NULL,cex.names=0.1)
+  
+}
+
+maineffects(mp.path)
+maineffects(msoil.sap)
+maineffects(man.par)
+maineffects(mwood.sap)
+maineffects(mmyco.par)
+maineffects(munsp.sap)
+maineffects(mlitter.sap)
+maineffects(mdung.sap)
+maineffects(mAMF)
+maineffects(mfol.end)
+maineffects(mnect.sap)
+maineffects(mpollen.sap)
+maineffects(mlich.par)
+maineffects(mECM)
+maineffects(munsp.path)
+maineffects(malg.par)
+maineffects(mepi)
+maineffects(msoot.mold)
 # is growth-form associated with farming system?
 # abundance of filamentous_mycelium by farming system (boxplot) + aov
 # abundance of biflagellate-rhizomycelial boxplot + aov
