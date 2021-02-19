@@ -171,6 +171,7 @@ taxEnvmodel<-function(d){
 }
 
 # for interaction network, whole
+# still needs effort in it!!
 get.no<-function(v, d2){
   tax1<-v
   o<-c(rep(NA,length(d1)))
@@ -179,6 +180,7 @@ get.no<-function(v, d2){
     fit<-NULL
     tab<-NULL
     tax2<-d1[,i]
+    effort<-as.numeric(as.character(d2$SeqDepth))
     treatment<-as.factor(d2$Treatment)
     depth<-as.factor(d2$Depth)
     pH<-as.numeric(as.character(d2$pH))
@@ -193,7 +195,7 @@ get.no<-function(v, d2){
     B.Density<-as.numeric(as.character(d2$B.Density_gcm3))
     fit <- glm(tax1 ~ treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density+tax2,family="gaussian")
     tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-    o[i]<-tab$varExplained[7]*(fit$coefficients[8]/abs(fit$coefficients[8]))/100
+    o[i]<-tab$varExplained[13]*(fit$coefficients[17]/abs(fit$coefficients[17]))/100
    
   }
   o
@@ -225,6 +227,7 @@ sppInt<-function(d){
 }
 
 # for interaction network data sliced by farming system
+# get.no2 MIGHT NEED TO BE UPDATED FOR DEGREES OF FREEDOM (REDUCE FACTORS!!)
 get.no2<-function(v, d2, d1){
   tax1<-v
   o<-c(rep(NA,length(d1)))
@@ -248,7 +251,7 @@ get.no2<-function(v, d2, d1){
     B.Density<-as.numeric(as.character(d2$B.Density_gcm3))
     fit <- glm(tax1 ~ effort+depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density+tax2,family="gaussian")
     tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-    o[i]<-tab$varExplained[9]*(fit$coefficients[12]/abs(fit$coefficients[12]))/100
+    o[i]<-tab$varExplained[12]*(fit$coefficients[15]/abs(fit$coefficients[15]))/100
     
   }
   o
@@ -270,11 +273,10 @@ sppInt2<-function(d){
   tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
   out<-out[as.character(tmOrder1), as.character(tmOrder1)]
   out
-  
-  
 }
 
 # for interaction network with data sliced by depth
+# get.no3 MIGHT NEED TO BE UPDATED FOR DEGREES OF FREEDOM (REDUCE FACTORS!!)
 get.no3<-function(v, d2, d1){
   tax1<-v
   o<-c(rep(NA,length(d1)))
@@ -298,7 +300,7 @@ get.no3<-function(v, d2, d1){
     B.Density<-as.numeric(as.character(d2$B.Density_gcm3))
     fit <- glm(tax1 ~ effort+trt+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density+tax2,family="gaussian")
     tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-    o[i]<-tab$varExplained[9]*(fit$coefficients[11]/abs(fit$coefficients[11]))/100 # count the position of tax2 in the effects; the position of var explained = num of levels in factor + number of linear covariates ...
+    o[i]<-tab$varExplained[12]*(fit$coefficients[14]/abs(fit$coefficients[14]))/100 # count the position of tax2 in the effects; the position of var explained = num of levels in factor + number of linear covariates ...
     
   }
   o
@@ -489,7 +491,7 @@ mematrix<-function(m,d, direction){
 # import fungal-bacterial dataset
 GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020.rds")
 GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020.rds")
-sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
+#sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
 sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
 sample_data(GAD.Fun)$SampleDepth<-sample_data(GAD.Fun)$SeqDepth/sample_data(GAD.Fun)$Fun_QPCR
 tt1<-as.data.frame(as.matrix(tax_table(GAD.Fun)))
@@ -502,14 +504,14 @@ sum(is.na(tt1$Class))/nrow(tt1) # 46 % unknown to class
 # if I keep unknown spp by pasting genus; aggregate to spp, I lose 6% compared to aggregating to family and 12%$ compared to aggregating to order (16% aggregated to class level). Class and above are more likely to be random amplification targets.
 GAD.Fun.nf<-GAD.Fun
 GAD.Fun.nf<-subset_samples(GAD.Fun.nf, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") # dataset that is not taxa filtered (compare overarching patterns vs completely subset dataset)
+
 GAD.Fun<-subset_taxa(GAD.Fun, !is.na(Genus)) # remove anything not ID'd to Genus
-GAD.Fun<-tax_glom(GAD.Fun, taxrank="Species") # glom to species
+# now give all unknown spp a same name:
 tt1<-as.data.frame(as.matrix(tax_table(GAD.Fun)))
-tt1$Species[is.na(tt1$Species)]<-paste(tt1$Genus[is.na(tt1$Species)], "Undefined")
+tt1$Species[is.na(tt1$Species)]<-paste0(tt1$Genus[is.na(tt1$Species)], "Undefined", sep="")
 tax_table(GAD.Fun)<-tax_table(as.matrix(tt1))
-
-
-#GAD.Fun<-tax_glom(GAD.Fun, taxrank="Species")
+# now aggregate to species level
+GAD.Fun<-tax_glom(GAD.Fun, taxrank="Species")
 
 # annotate fungi by fungal traits database 
 fungalTraits<-read.csv("/Users/dietrich/Documents/GitHub/Plant-Health-Project/Analysis/Data/FungalTraits2021.csv")
