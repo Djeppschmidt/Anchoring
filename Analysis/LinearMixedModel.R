@@ -489,7 +489,7 @@ mematrix<-function(m,d, direction){
 # fd<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADfun2020.rds")
 
 # import fungal-bacterial dataset
-GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020.rds")
+#GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020.rds")
 GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020.rds")
 #sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
 sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
@@ -531,7 +531,7 @@ fGA.Qnf<-GAD.QScale(GAD.Fun.nf, type="F")
 
 # filter samples to top 4 levels
 fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") 
-bGA.Ql<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30")
+#bGA.Ql<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30")
 
 # alpha diversity
 a.ffit<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_data(fGA.Ql)$SeqDepth)
@@ -540,7 +540,9 @@ summary(aov(a.ffit))  # by seq depth = 17.8% of variance explained at spp level
 
 
 
-# COMPLETE THIS DATA FRAME !!! (do today!!)
+# make data frame of covariants
+# check for significant associations among them
+# ensure that each column is formatted correctly
 f.meta<-as.data.frame(as.matrix(sample_data(fGA.Ql)))
 f.meta$Fun_QPCR<-as.numeric(as.character(f.meta$Fun_QPCR))
 f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
@@ -569,9 +571,13 @@ plot(f.meta$Sand_percent, f.meta$Silt_percent)
 plot(f.meta$Sand_percent, f.meta$B.Density_gcm3)
 plot(f.meta$Clay_percent,f.meta$B.Density_gcm3)
 
-boxplot(f.meta$Fun_QPCR~f.meta$Depth+f.meta$Treatment)
-# colinearity:
+# check effect of farming system and depth on total fungi
+boxplot(f.meta$Fun_QPCR~f.meta$Depth+f.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Total Fungi QPCR", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+summary(aov(f.meta$Fun_QPCR~f.meta$Depth*f.meta$Treatment))
+# this shows that there is significant effects of depth, trt;
+# also supports interaction between depth and trt
 
+# colinearity:
 summary(aov(f.meta$pH~f.meta$Depth)) # 0.433
 summary(aov(f.meta$C_percent~f.meta$Depth)) # 0.870
 summary(aov(f.meta$No3_ugPerg~f.meta$Depth)) # 0.466
@@ -629,13 +635,20 @@ boxplot(f.meta$B.Density_gcm3~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,ce
 identical(rownames(f.meta), rownames(estimate_richness(fGA.Ql, measures="Observed")))
 resids<-a.ffit$residuals
 alphadiveffect<-summary(aov(lm(resids~f.meta$Depth*f.meta$Treatment)))
+plot(fitted(a.ffit), resid(a.ffit))
+abline(0,0)
 #boxplot
 boxplot(resids~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Alpha Diversity", ylab="Sequencing Depth Residual", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
 abline(h = 0, col = 'black', lty=c(2)) 
 
 # just sequencing effort (for dissertation):
-a.ffit2<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_data(fGA.Ql)$SampleDepth) # by relative sampling effort
+# run as log because it reduces the structure of the residuals ...
+a.ffit2<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~log(sample_data(fGA.Ql)$SampleDepth)) # by relative sampling effort
+plot(fitted(a.ffit2), resid(a.ffit2)) # clear structure in residuals
+abline(0,0)
+
 summary(aov(a.ffit2)) # by sampleing effort = 24.1% of variance explained
+# sampling effort explains 56 % of log transformed variance
 resids2<-a.ffit2$residuals
 alphadiveffect2<-summary(aov(lm(resids2~f.meta$Depth*f.meta$Treatment)))
 #boxplot
@@ -652,6 +665,9 @@ divVar
 # what does alpha diversity mean in an organic farming system?
 # this data is not filtered as needed for abundance data       
 
+# sanity check: list uniuqe primary liftestyles:
+unique(as.data.frame(as.matrix(tax_table(fGA.Ql)))$primary_lifestyle)
+
 p.path<-subset_taxa(fGA.Ql, primary_lifestyle=="plant_pathogen")
 soil.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="soil_saprotroph")
 an.par<-subset_taxa(fGA.Ql, primary_lifestyle=="animal_parasite")
@@ -663,6 +679,7 @@ dung.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="dung_saprotroph")
 AMF<-subset_taxa(fGA.Ql, primary_lifestyle=="arbuscular_mycorrhizal")
 fol.end<-subset_taxa(fGA.Ql, primary_lifestyle=="foliar_endophyte")
 nect.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="nectar/tap_saprotroph")
+root.endophyte<-subset_taxa(fGA.Ql, primary_lifestyle=="root_endophyte")
 pollen.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="pollen_saprotroph")
 lich.par<-subset_taxa(fGA.Ql, primary_lifestyle=="lichen_parasite")
 ECM<-subset_taxa(fGA.Ql, primary_lifestyle=="ectomycorrhizal")
@@ -670,7 +687,9 @@ unsp.path<-subset_taxa(fGA.Ql, primary_lifestyle=="unspecified_pathotroph")
 epi<-subset_taxa(fGA.Ql, primary_lifestyle=="epiphyte")
 alg.par<-subset_taxa(fGA.Ql, primary_lifestyle=="algal_parasite")
 soot.mold<-subset_taxa(fGA.Ql, primary_lifestyle=="sooty_mold")
-
+unknown<-subset_taxa(fGA.Ql, primary_lifestyle=="unspecified")
+lichenized<-subset_taxa(fGA.Ql, primary_lifestyle=="lichenized")
+epiphyte<-subset_taxa(fGA.Ql, primary_lifestyle=="epiphyte")
 myc<-subset_taxa(fGA.Ql, Growth_form_template=="filamentous_mycelium")
 yeast<-subset_taxa(fGA.Ql, Growth_form_template=="yeast")
 
@@ -679,7 +698,7 @@ p.path.r<-unlist(estimate_richness(p.path, measures="Observed"))
 soil.sap.r<-unlist(estimate_richness(soil.sap, measures="Observed"))
 an.par.r<-unlist(estimate_richness(an.par, measures="Observed"))
 wood.sap.r<-unlist(estimate_richness(wood.sap, measures="Observed"))
-#nknown.r<-unlist(estimate_richness(p.path, measures="Observed")
+unknown.r<-unlist(estimate_richness(unknown, measures="Observed"))
 myco.par.r<-unlist(estimate_richness(myco.par, measures="Observed"))
 unsp.sap.r<-unlist(estimate_richness(unsp.sap, measures="Observed"))
 litter.sap.r<-unlist(estimate_richness(litter.sap, measures="Observed"))
@@ -694,9 +713,14 @@ unsp.path.r<-unlist(estimate_richness(unsp.path, measures="Observed"))
 epi.r<-unlist(estimate_richness(epi, measures="Observed"))
 alg.par.r<-unlist(estimate_richness(alg.par, measures="Observed"))
 soot.mold.r<-unlist(estimate_richness(soot.mold, measures="Observed"))
+root.endophyte.r<-unlist(estimate_richness(root.endophyte, measures="Observed"))
+epiphyte.r<-unlist(estimate_richness(epiphyte, measures="Observed"))
+lichenized.r<-unlist(estimate_richness(lichenized, measures="Observed"))
 myc.r<-unlist(estimate_richness(myc, measures="Observed"))
 yeast.r<-unlist(estimate_richness(yeast, measures="Observed"))
 tot.r<-unlist(estimate_richness(fGA.Ql, measures="Observed"))
+
+
 div.df<-data.frame(p.path.r,
                    soil.sap.r,
                    an.par.r,
@@ -718,6 +742,10 @@ div.df<-data.frame(p.path.r,
                    yeast.r,
                    myc.r,
                    tot.r,
+                   lichenized.r,
+                   unknown.r,
+                   root.endophyte.r,
+                   epiphyte.r,
                    "depth"=f.meta$Depth,
                    "treatment"= f.meta$Treatment,
                    "seqs"=as.numeric(as.character(f.meta$SeqDepth)))
@@ -736,7 +764,7 @@ with(div.df,summary(aov(lm(an.par.r~seqs+depth*treatment))))
 
 with(div.df,boxplot(wood.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Wood Saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(wood.sap.r~seqs+depth*treatment))))
-
+with(div.df,TukeyHSD(aov(lm(wood.sap.r~seqs+depth*treatment))))
 
 #unique(as.data.frame(as.matrix(tax_table(fGA.Ql)))$primary_lifestyle)
 #estimate_richness(fGA.Ql, measures="Observed")
@@ -748,7 +776,7 @@ with(div.df,boxplot(unsp.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, m
 with(div.df,summary(aov(lm(unsp.sap.r~seqs+depth*treatment))))
 with(div.df,TukeyHSD(aov(lm(unsp.sap.r~seqs+depth*treatment))))
 p<-plot_bar(unsp.sap, x="Treatment",facet_grid = "Depth", fill="Family.x")+ geom_bar(aes(color=Family.x, fill=Family.x), stat="identity", position="stack")
-
+p
 
 with(div.df,boxplot(litter.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Litter Saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(litter.sap.r~seqs+depth*treatment))))
@@ -782,6 +810,15 @@ with(div.df,summary(aov(lm(alg.par.r~seqs+depth*treatment))))
 
 with(div.df,boxplot(soot.mold.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Soot Mold Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(soot.mold.r~seqs+depth*treatment))))
+
+with(div.df,boxplot(unknown.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Unknown Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
+with(div.df,summary(aov(lm(unknown.r~seqs+depth*treatment))))
+
+with(div.df,boxplot(root.endophyte.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Root Endophyte Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
+with(div.df,summary(aov(lm(root.endophyte.r~seqs+depth*treatment))))
+
+with(div.df,boxplot(lichenized.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="lichenized Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
+with(div.df,summary(aov(lm(lichenized.r~seqs+depth*treatment))))
 
 with(div.df,boxplot(myc.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="mycelium Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(myc.r~seqs+depth*treatment))))
@@ -842,8 +879,10 @@ f.dist<-vegdist(f.otu, method="bray")
 adonis(f.dist~Depth+Treatment+C_N_ratio+pH+C_percent+No3_ugPerg+Nh4_ugPerg+Clay_percent+Silt_percent, data=f.meta, permutations = 999, method="bray")
 adonis(f.dist~C_N_ratio+pH+C_percent+No3_ugPerg+Nh4_ugPerg+Clay_percent+Silt_percent, data=f.meta, permutations = 999, method="bray")
 
-b.otu<-as.data.frame(as.matrix(otu_table(bGA.Ql)))
-b.beta<-adonis(b.otu~Depth+Treatment+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=b.meta, permutations = 999, method="bray")
+plot_ordination(fGA.Ql,plot(ordinate(fGA.Ql, method="DCA", distance = "bray")), type="samples", color = "Treatment") + facet_wrap(~Depth) + theme_bw()
+plot_ordination(fGA.Ql,plot(ordinate(fGA.Ql, method="DCA", distance = "bray")), type="taxa", color = "Phylum.x") + facet_wrap(~primary_lifestyle) + theme_bw()
+#b.otu<-as.data.frame(as.matrix(otu_table(bGA.Ql)))
+#b.beta<-adonis(b.otu~Depth+Treatment+pH+C_percent+No3_ugPerg+Nh4_ugPerg, data=b.meta, permutations = 999, method="bray")
 
 # ignore bacteria for now []
 # subset taxa to depth and farming system does not work because it lacks power ...
@@ -995,8 +1034,8 @@ corrplot::corrplot(f.Org3net, method="color",
 # network analysis!!!n####
 colrs<-c("#FF0000", "#FF9900", "#CCFF00", "#33FF00", "#00FF66", "#00FFFF", "#0066FF", "#3300FF", "#CC00FF", "#FF0099","#4DAF4A", "#7FC97F", "#7570B3", "#CCCCCC")
 group<-as.data.frame(as.matrix(tax_table(fQ.NTf)))$primary_lifestyle
-c<-f.NTnet*(f.NTnet>0.3 + (-0.3 > f.NTnet))
-sum(c)
+c<-f.NTnet*(f.NTnet>0.2 + (-0.2 > f.NTnet))
+#sum(c)
 n<-graph_from_incidence_matrix(c, directed=T, mode="out")
 #cfg<-(n)
 V(n)$color<-colrs[as.factor(group)]
@@ -1006,11 +1045,12 @@ l<-layout_with_dh(n)
 l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
 plot(n,vertex.label=NA, main="NT", vertex.size=5, edge.arrow.size=0.5, 
      #rescale=F, 
-     layout=l,
-     vertex.color=colrs[as.factor(group)])
+     layout=l#,
+     #vertex.color=colrs[as.factor(group)]
+     )
 
 
-c2<-f.CTnet*(f.CTnet>0.3 + (-0.3 > f.CTnet))
+c2<-f.CTnet*(f.CTnet>0.2 + (-0.2 > f.CTnet))
 sum(c2)
 n2<-graph_from_incidence_matrix(c2, directed=T, mode="out")
 
@@ -1027,13 +1067,54 @@ hist(degree(n2))
 tc <- cluster_walktrap(n2)
 modularity(n2, unlist(tc))
 
-c3<-f.Org3net*(f.Org3net>0.3 + (-0.3 > f.Org3net))
-sum(c3)
+c3<-f.Org3net*(f.Org3net>0.2 + (-0.2 > f.Org3net))
+#sum(c3)
 n3<-graph_from_incidence_matrix(c3, directed=T, mode="out")
-table(V(n3)$type)
+n3<-delete.vertices(simplify(n3), degree(n3)==0)
+l<-layout_with_dh(n3)
+l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
 
-plot(n3, layout=layout.fruchterman.reingold.grid(n3),
-     vertex.label=NA, main="ORG", vertex.size=5)
+plot(n3, vertex.label=NA, main="ORG", vertex.size=5,edge.arrow.size=0.5)
+
+data.frame(as.matrix(tax_table(fQ.ORGf)))[rownames(as.data.frame(as.matrix(tax_table(fQ.ORGf))))==names(c3)[colSums(c3)==max(colSums(c3))],] #find max 
+stest<-subset_taxa(fGA.Qlf, Genus=="g__Atractium" & Species=="s__crassum")
+View(as.data.frame(as.matrix(otu_table(stest))))
+
+c2<-as.data.frame(c2)
+View(data.frame(as.matrix(tax_table(fQ.CTf)))[rownames(as.data.frame(as.matrix(tax_table(fQ.CTf))))==names(c2)[rowSums(c2)==max(rowSums(c2))],]) #find max
+stest<-subset_taxa(fGA.Qlf, Species=="g__TetraplosphaeriaUndefined")
+View(as.data.frame(as.matrix(otu_table(stest)))[,order(names(as.data.frame(as.matrix(otu_table(stest)))))]) # it's magic when it works on the first try
+View(as.data.frame(as.matrix(sample_data(stest))))
+
+library(dplyr)
+library(stringr)
+mdf<-as.data.frame(as.matrix(tax_table(fGA.Qlf)))
+mdf$id<-rownames(mdf)
+mdf$id<-as.character(mdf$id)
+
+plotIgraphNet<-function(net, ps, main){
+  require(RColorBrewer)
+  require(igraph)
+  mdf<-as.data.frame(as.matrix(tax_table(ps)))
+  mdf$id<-rownames(mdf)
+  mdf$id<-as.character(mdf$id)
+  updatedn2<-igraph::set_vertex_attr(net, 
+                                     name="primary_lifestyle",
+                                     index=V(net),
+                                     value = sapply(V(net)$name, function(x){
+                                       mdf$primary_lifestyle[mdf$id==x]
+                                     }))
+  nb.cols<-length(unique(V(updatedn2)$primary_lifestyle))
+  mycolors <- colorRampPalette(brewer.pal(8, "Set3"))(nb.cols)
+  coul<-mycolors[as.numeric(as.factor(V(updatedn2)$primary_lifestyle))]
+  plot(updatedn2, vertex.label=NA, main=main, vertex.size=5,edge.arrow.size=0.5,vertex.color=coul)
+  legend("bottomleft", legend=levels(as.factor(V(updatedn2)$primary_lifestyle)), col = mycolors, bty = "n", text.col=mycolors, horiz = FALSE)
+}
+
+plotIgraphNet(n, fGA.Qlf, main="NT")
+plotIgraphNet(n2, fGA.Qlf, main="CT")
+plotIgraphNet(n3, fGA.Qlf, main="ORG")
+
 # guild questions:
 
 # main effect of farming system ####
@@ -1076,7 +1157,9 @@ munsp.path<-subset_taxa(fGA.Qlf, primary_lifestyle=="unspecified_pathotroph")
 mepi<-subset_taxa(fGA.Qlf, primary_lifestyle=="epiphyte")
 malg.par<-subset_taxa(fGA.Qlf, primary_lifestyle=="algal_parasite")
 msoot.mold<-subset_taxa(fGA.Qlf, primary_lifestyle=="sooty_mold")
-
+#munknown<-subset_taxa(fGA.Qlf, primary_lifestyle=="unspecified")
+#mlichenized<-subset_taxa(fGA.Qlf, primary_lifestyle=="lichenized")
+mepiphyte<-subset_taxa(fGA.Qlf, primary_lifestyle=="epiphyte")
 # sample sums by category
 # this function makes a plot of abundance by farming system and depth
 # it also runs an anova to test difference in abundance by factor categories
@@ -1126,7 +1209,7 @@ maineffects(munsp.path)
 maineffects(malg.par)
 maineffects(mepi)
 maineffects(msoot.mold)
-
+maineffects(mepiphyte)
 t1<-Sys.time()
 emp.path<-taxmodel(mp.path)
 emsoil.sap<-taxmodel(msoil.sap)
@@ -1171,9 +1254,9 @@ plotdiff(emunsp.sap)
 plotdiff(emlitter.sap)
 plotdiff(emdung.sap)
 plotdiff(emAMF)
-plotdiff(emfol.end) # only one significant
+plotdiff(emfol.end) 
 plotdiff(emnect.sap)
-plotdiff(empollen.sap) # only on significant
+plotdiff(empollen.sap)
 plotdiff(emlich.par) #none 
 plotdiff(emECM) # none
 plotdiff(emunsp.path) # only one significant
@@ -1406,7 +1489,7 @@ table(tsOrder[trtvar>20])
 table(tgOrder[trtvar>20])
 table(tfOrder[trtvar>20])
 
-plot_bar(fGA.Qlf, x="Treatment", fill="Growth_form_template") + geom_bar(aes(color=Growth_form_template, fill=Growth_form_template), stat="identity", position="stack")
+plot_bar(fGA.Qlf, x="Treatment", fill="Growth_form_template") + geom_bar(aes(color=Growth_form_template, fill=Growth_form_template), stat="identity", position="stack")+theme_bw()
 plot_bar(fGA.Qlf, x="Treatment", fill="primary_lifestyle")+geom_bar(aes(color=primary_lifestyle, fill=primary_lifestyle), stat="identity", position="stack")
 
 # boxplot of filamentous_mycelium by farming system
