@@ -43,6 +43,8 @@ GAD.Qscale<-function(ps, val, scale){
 }
 
 # Models the relationship between taxon and environment with treatment factors
+# d = ps object
+# name = name of column from tax table to use for labeling output
 # outputs:  $fit = glm object
 #           $tab = significance table
 #           $residuals = residuals from the model
@@ -74,14 +76,14 @@ taxmodel<-function(d){
   B.Density<-as.numeric(as.character(d2$B.Density_gcm3))
   species<-as.character(d3$Species)
   out<-NULL
-  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
-  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
+  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort+depth+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
+  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort+depth+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
   out$fit<-list(1:length(ncol(d1)))
   out$plots<-list(1:length(ncol(d1)))
   colnames(out$predicted)<-colnames(d1)
   for(i in c(1:ncol(d1))){
     fit<-NULL
-    fit <- glm(d1[,i] ~ effort+treatment*pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian")
+    fit <- glm(d1[,i] ~ depth+treatment+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian")
     
     out$residuals[,i]<-residuals(fit)
     out$predicted[,i]<-predict(fit)
@@ -103,9 +105,9 @@ taxmodel<-function(d){
   names(out$fit)<-colnames(d1)
   names(out$plots)<-as.character(d3$Species)
   
-  out$effectDF<-matrix(nrow=ncol(d1), ncol=2)
-  rownames(out$effectDF)<-as.character(d3$Species)
-  colnames(out$effectDF)<-c("CT", "ORG")
+  out$effectDF<-matrix(nrow=ncol(d1), ncol=4)
+  rownames(out$effectDF)<-d3$Species
+  colnames(out$effectDF)<-c("CT", "ORG", "Lifestyle", "SciName")
   for(i in 1:nrow(out$effectDF)){
     out$effectDF[i,1]<-out$fit[[i]]$coefficients["treatmentCT"]
     out$effectDF[i,2]<-out$fit[[i]]$coefficients["treatmentOrg3"]
@@ -113,7 +115,8 @@ taxmodel<-function(d){
    # out$effectDF[i,1]<-out$fit[[i]]$coefficients["treatmentCT"]/out$fit[[i]]$coefficients["(Intercept)"]
   #  out$effectDF[i,2]<-out$fit[[i]]$coefficients["treatmentOrg3"]/out$fit[[i]]$coefficients["(Intercept)"]
   }
-  
+  out$effectDF[,3]<-d3$primary_lifestyle
+  out$effectDF[,4]<-paste(d3$Genus, d3$Species)
   
   out
 }
@@ -489,8 +492,70 @@ mematrix<-function(m,d, direction){
 # fd<-readRDS("/Volumes/Seagate\ Expansion\ Drive/Illumina/Processing/DES/GAD/GADfun2020.rds")
 
 # import fungal-bacterial dataset
-#GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020.rds")
+GAD.bac<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADbac2020.rds")
 GAD.Fun<-readRDS("/Users/dietrich/Documents/GitHub/Anchoring/Data/GAD/GADfun2020.rds")
+
+# calculate % archaea in each sample
+arc<-subset_taxa(GAD.bac, Kingdom=="Archaea")
+bac<-subset_taxa(GAD.bac, Kingdom=="Bacteria")
+ratio<-sample_sums(bac)/(sample_sums(arc) + sample_sums(bac))
+
+bmeta<-as.data.frame(as.matrix(sample_data(GAD.bac)))
+identical(rownames(bmeta), names(ratio)) # make sure the datasets are organized the same way
+bmeta$bacteria<-as.numeric(as.character(bmeta$Bac_QPCR))*ratio # take ratio of bacteria from 16s
+sample_data(GAD.bac)<-sample_data(bmeta) # return updated metadata to bacterial dataset
+GAD.bac<-subset_samples(GAD.bac, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") # subset the datset to depths with enough replication
+b.meta<-as.data.frame(as.matrix(sample_data(GAD.bac))) # format data to insert
+b.meta$Fun_QPCR<-as.numeric(as.character(b.meta$Fun_QPCR)) # 
+b.meta$Bac_QPCR<-as.numeric(as.character(b.meta$Bac_QPCR))
+b.meta$bacteria<-as.numeric(as.character(b.meta$bacteria))
+b.meta$Depth<-factor(b.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30")) # put factor levels in the right order
+b.meta$Treatment<-factor(b.meta$Treatment, levels=c("NT", "CT", "Org3")) # put factor levels in the right order
+b.meta$FB_Ratio<-b.meta$Fun_QPCR/b.meta$bacteria # calculate the fungal:bacteria ratio
+b.meta2<-b.meta[b.meta$Description!="Org30_54"&b.meta$Description!="Org35_104"&b.meta$Description!="Org310Ap4"&b.meta$Description!="Org3Ap304",] # subset the metadata, excluding the levels that we don't want
+# do QPCR stats:
+
+# figure 1.1 ####
+boxplot(b.meta$Fun_QPCR~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Total Fungi QPCR", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+stripchart(b.meta$Fun_QPCR~b.meta$Depth+b.meta$Treatment, vertical = TRUE,
+           method = "jitter", add = TRUE, pch = 20, col = 'black')
+summary(aov(b.meta$Fun_QPCR~b.meta$Depth*b.meta$Treatment))
+# figure 1.2 ####
+boxplot(b.meta$bacteria~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Total Bacteria QPCR", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+stripchart(b.meta$bacteria~b.meta$Depth+b.meta$Treatment, vertical = TRUE,
+           method = "jitter", add = TRUE, pch = 20, col = 'black')
+summary(aov(b.meta$bacteria~b.meta$Depth*b.meta$Treatment))
+# figure 1.3 ####
+boxplot(b.meta$FB_Ratio~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Fungal Bacterial Ratio", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+stripchart(b.meta$FB_Ratio~b.meta$Depth+b.meta$Treatment, vertical = TRUE,
+           method = "jitter", add = TRUE, pch = 20, col = 'black')
+summary(aov(b.meta$FB_Ratio~b.meta$Depth*b.meta$Treatment))
+
+boxplot(b.meta2$FB_Ratio~b.meta2$Depth+b.meta2$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Fungal Bacterial Ratio", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+stripchart(b.meta2$FB_Ratio~b.meta2$Depth+b.meta2$Treatment, vertical = TRUE,
+           method = "jitter", add = TRUE, pch = 20, col = 'black')
+summary(aov(b.meta2$FB_Ratio~b.meta2$Depth*b.meta2$Treatment))
+
+# model fungal vs bacterial depth dependence
+bdepthfit<-glm(bacteria~Depth*Treatment,data = b.meta)
+fdepthfit<-glm(Fun_QPCR~Depth*Treatment,data = b.meta)
+fdepthfit2<-glm(Fun_QPCR~Depth*Treatment,data = b.meta2)
+rdepthfit<-glm(FB_Ratio~Depth*Treatment,data = b.meta)
+#p1<-effect_plot(bdepthfit, pred=Treatment, plot.points = T)
+#p2<-effect_plot(fdepthfit, pred=Treatment)
+
+bdepthfit$coefficients
+fdepthfit$coefficients # 33.46 %
+fdepthfit2$coefficients # 32.87 %
+
+# make biplot (percentage) Figure 1.4 ####
+fdRat<-data.frame("Bacteria"=c(bdepthfit$coefficients[5]/bdepthfit$coefficients[1],bdepthfit$coefficients[6]/bdepthfit$coefficients[1]), "Fungi"=c(fdepthfit$coefficients[5]/fdepthfit$coefficients[1],fdepthfit$coefficients[6]/fdepthfit$coefficients[1]))#, "Ratio"=c(rdepthfit$coefficients[5]/rdepthfit$coefficients[1],rdepthfit$coefficients[6]/rdepthfit$coefficients[1]))
+
+par(mar=c(10, 4, 4, 2) + 0.1)
+barplot(t(fdRat), beside=T, las=2, names.arg = c("Chisel-Till", "Organic"))
+legend("topleft", legend=colnames(fdRat), fill=grey.colors(3))
+abline(0,0)
+
 #sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
 sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
 sample_data(GAD.Fun)$SampleDepth<-sample_data(GAD.Fun)$SeqDepth/sample_data(GAD.Fun)$Fun_QPCR
@@ -502,49 +567,62 @@ sum(is.na(tt1$Order))/nrow(tt1) # 50 % unknown to order
 sum(is.na(tt1$Class))/nrow(tt1) # 46 % unknown to class
 
 # if I keep unknown spp by pasting genus; aggregate to spp, I lose 6% compared to aggregating to family and 12%$ compared to aggregating to order (16% aggregated to class level). Class and above are more likely to be random amplification targets.
-GAD.Fun.nf<-GAD.Fun
-GAD.Fun.nf<-subset_samples(GAD.Fun.nf, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") # dataset that is not taxa filtered (compare overarching patterns vs completely subset dataset)
+#GAD.Fun.nf<-GAD.Fun
+#GAD.Fun.nf<-subset_samples(GAD.Fun.nf, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") # dataset that is not taxa filtered (compare overarching patterns vs completely subset dataset)
 
-GAD.Fun<-subset_taxa(GAD.Fun, !is.na(Genus)) # remove anything not ID'd to Genus
+# quantitative scaling step:
+fGA.Q<-GAD.QScale(GAD.Fun,type="F")
+#fGA.Qnf<-GAD.QScale(GAD.Fun.nf, type="F")
+#bGA.Q<-GAD.QScale(GAD.bac,type="B")
+
+# filtering steps:
+
+fGA.Q<-subset_taxa(GAD.Fun, !is.na(Genus)) # remove anything not ID'd to Genus
+fGA.Qnf2<-subset_taxa(GAD.Fun, is.na(Genus)) # select only things that are not filtered to Genus
+
 # now give all unknown spp a same name:
-tt1<-as.data.frame(as.matrix(tax_table(GAD.Fun)))
+tt1<-as.data.frame(as.matrix(tax_table(fGA.Q))
 tt1$Species[is.na(tt1$Species)]<-paste0(tt1$Genus[is.na(tt1$Species)], "Undefined", sep="")
-tax_table(GAD.Fun)<-tax_table(as.matrix(tt1))
+tax_table(fGA.Q)<-tax_table(as.matrix(tt1))
 # now aggregate to species level
-GAD.Fun<-tax_glom(GAD.Fun, taxrank="Species")
+fGA.Q<-tax_glom(fGA.Q, taxrank="Species")
 
 # annotate fungi by fungal traits database 
 fungalTraits<-read.csv("/Users/dietrich/Documents/GitHub/Plant-Health-Project/Analysis/Data/FungalTraits2021.csv")
 View(fungalTraits)
 fungalTraits<-as.data.frame(fungalTraits)
 fungalTraits$GENUS<-paste0("g__", fungalTraits$GENUS, sep="")
-tt<-as.data.frame(as.matrix(tax_table(GAD.Fun)))
+tt<-as.data.frame(as.matrix(tax_table(fGA.Q)))
 tt2<-left_join(tt, fungalTraits, by=c("Genus"="GENUS"))
 identical(tt$Family, tt2$Family.x) # sanity check
 rownames(tt2)<-rownames(tt)
 tt2<-tt2[,-c(8:13,16,21,25,29:31)] # remove columns not being used in the analysis
-tax_table(GAD.Fun)<-tax_table(as.matrix(tt2))
-# normalize by QPCR:
-fGA.Q<-GAD.QScale(GAD.Fun,type="F")
-fGA.Qnf<-GAD.QScale(GAD.Fun.nf, type="F")
-#bGA.Q<-GAD.QScale(GAD.bac,type="B")
+tax_table(fGA.Q)<-tax_table(as.matrix(tt2))
 
 # filter samples to top 4 levels
 fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") 
 #bGA.Ql<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30")
 
 # alpha diversity
-a.ffit<-lm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_data(fGA.Ql)$SeqDepth)
+# filtered dataset
+a.ffit<-glm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~sample_data(fGA.Ql)$SeqDepth)
 #a.bfit<-lm(unlist(estimate_richness(bGA.Ql, measures="Observed"))~sample_sums(bGA.Ql))
 summary(aov(a.ffit))  # by seq depth = 17.8% of variance explained at spp level
 
-
+# alpha diversity model for unfiltered
+a.nffit<-glm(unlist(estimate_richness(fGA.Qnf2, measures="Observed"))~sample_data(fGA.Qnf2)$SeqDepth)
+#a.bfit<-lm(unlist(estimate_richness(bGA.Ql, measures="Observed"))~sample_sums(bGA.Ql))
+summary(aov(a.nffit))
 
 # make data frame of covariants
 # check for significant associations among them
 # ensure that each column is formatted correctly
+
+# filtered metadata
 f.meta<-as.data.frame(as.matrix(sample_data(fGA.Ql)))
 f.meta$Fun_QPCR<-as.numeric(as.character(f.meta$Fun_QPCR))
+f.meta$Bac_QPCR<-as.numeric(as.character(f.meta$Bac_QPCR))
+f.meta$FB_Ratio<-f.meta$Fun_QPCR/f.meta$Bac_QPCR
 f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
 f.meta$Treatment<-factor(f.meta$Treatment, levels=c("NT", "CT", "Org3"))
 f.meta$pH<-as.numeric(as.character(f.meta$pH))
@@ -557,6 +635,36 @@ f.meta$Clay_percent<-as.numeric(as.character(f.meta$Clay_percent))
 f.meta$Silt_percent<-as.numeric(as.character(f.meta$Silt_percent))
 f.meta$Sand_percent<-as.numeric(as.character(f.meta$Sand_percent))
 f.meta$B.Density_gcm3<-as.numeric(as.character(f.meta$B.Density_gcm3))
+f.meta$SeqDepth<-as.numeric(as.character(f.meta$SeqDepth))
+f.meta$SampleDepth<-as.numeric(as.character(f.meta$SampleDepth))
+
+# not filtered metadata
+nf.meta<-as.data.frame(as.matrix(sample_data(fGA.Qnf2)))
+nf.meta$Fun_QPCR<-as.numeric(as.character(nf.meta$Fun_QPCR))
+nf.meta$Bac_QPCR<-as.numeric(as.character(nf.meta$Bac_QPCR))
+nf.meta$FB_Ratio<-nf.meta$Fun_QPCR/nf.meta$Bac_QPCR
+nf.meta$Depth<-factor(nf.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
+nf.meta$Treatment<-factor(nf.meta$Treatment, levels=c("NT", "CT", "Org3"))
+nf.meta$pH<-as.numeric(as.character(nf.meta$pH))
+nf.meta$C_percent<-as.numeric(as.character(nf.meta$C_percent))
+nf.meta$No3_ugPerg<-as.numeric(as.character(nf.meta$No3_ugPerg))
+nf.meta$Nh4_ugPerg<-as.numeric(as.character(nf.meta$Nh4_ugPerg))
+nf.meta$C_N_ratio<-as.numeric(as.character(nf.meta$C_N_ratio))
+nf.meta$N_percent<-as.numeric(as.character(nf.meta$N_percent))
+nf.meta$Clay_percent<-as.numeric(as.character(nf.meta$Clay_percent))
+nf.meta$Silt_percent<-as.numeric(as.character(nf.meta$Silt_percent))
+nf.meta$Sand_percent<-as.numeric(as.character(nf.meta$Sand_percent))
+nf.meta$B.Density_gcm3<-as.numeric(as.character(nf.meta$B.Density_gcm3))
+nf.meta$SeqDepth<-as.numeric(as.character(nf.meta$SeqDepth))
+nf.meta$SampleDepth<-as.numeric(as.character(nf.meta$SampleDepth))
+
+# analysis of correltion of seqdepth with other factors:
+
+with(f.meta, summary(aov(glm(SampleDepth~Depth))))
+with(f.meta, summary(aov(glm(SeqDepth~Depth*Treatment))))
+with(f.meta, aov(glm(SeqDepth~Depth*Treatment)))$coefficients
+
+with(f.meta, boxplot(SeqDepth~Depth+Treatment))
 
 cor(f.meta$Clay_percent, f.meta$Silt_percent)
 cor(f.meta$Clay_percent, f.meta$Sand_percent)
@@ -571,9 +679,6 @@ plot(f.meta$Sand_percent, f.meta$Silt_percent)
 plot(f.meta$Sand_percent, f.meta$B.Density_gcm3)
 plot(f.meta$Clay_percent,f.meta$B.Density_gcm3)
 
-# check effect of farming system and depth on total fungi
-boxplot(f.meta$Fun_QPCR~f.meta$Depth+f.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Total Fungi QPCR", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
-summary(aov(f.meta$Fun_QPCR~f.meta$Depth*f.meta$Treatment))
 # this shows that there is significant effects of depth, trt;
 # also supports interaction between depth and trt
 
@@ -631,15 +736,47 @@ boxplot(f.meta$B.Density_gcm3~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,ce
 
 
 # depth plot of covariates
-
+# figure 3.1 ####
 identical(rownames(f.meta), rownames(estimate_richness(fGA.Ql, measures="Observed")))
 resids<-a.ffit$residuals
-alphadiveffect<-summary(aov(lm(resids~f.meta$Depth*f.meta$Treatment)))
+alphadiveffect<-summary(aov(glm(resids~f.meta$Depth*f.meta$Treatment)))
 plot(fitted(a.ffit), resid(a.ffit))
 abline(0,0)
 #boxplot
-boxplot(resids~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Alpha Diversity", ylab="Sequencing Depth Residual", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+boxplot(resids~f.meta$Depth+f.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Filtered Alpha Diversity", ylab="Sequencing Depth Residual", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
 abline(h = 0, col = 'black', lty=c(2)) 
+
+# figure 3.2 ####
+# alpha diversity of all taxa, unfiltered
+identical(rownames(nf.meta), rownames(estimate_richness(GAD.Fun.nf, measures="Observed")))
+nresids1<-a.n1ffit$residuals
+n1alphadiveffect<-summary(aov(glm(nresids1~nf.meta$Depth*nf.meta$Treatment)))
+plot(fitted(a.nffit), resid(a.n1ffit))
+abline(0,0)
+#boxplot
+boxplot(nresids1~nf.meta$Depth+nf.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Unfiltered Alpha Diversity", ylab="Sequencing Depth Residual", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+abline(h = 0, col = 'black', lty=c(2)) 
+
+# figure 3.3 ####
+identical(rownames(nf.meta), rownames(estimate_richness(fGA.Qnf2, measures="Observed")))
+nresids2<-a.n2ffit$residuals
+n2alphadiveffect<-summary(aov(glm(nresids2~nf.meta$Depth*nf.meta$Treatment)))
+plot(fitted(a.n2ffit), resid(a.n2ffit))
+abline(0,0)
+#boxplot
+boxplot(nresids2~nf.meta$Depth+nf.meta$Treatment, las=2, xlab=NULL,cex.names=0.1,main="Fungal Unfiltered Alpha Diversity", ylab="Sequencing Depth Residual", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+abline(h = 0, col = 'black', lty=c(2)) 
+# figure 3.4 ####
+identical(rownames(estimate_richness(fGA.Ql, measures="Observed")), rownames(estimate_richness(fGA.Qnf2, measures="Observed")))
+
+cor(unlist(estimate_richness(fGA.Ql, measures="Observed")),unlist(estimate_richness(fGA.Qnf2, measures="Observed")))
+
+alpha<-glm(unlist(estimate_richness(fGA.Ql, measures="Observed"))~ unlist(estimate_richness(fGA.Qnf2, measures="Observed")))
+alpha$coefficients
+
+plot(unlist(estimate_richness(fGA.Ql, measures="Observed"))~ unlist(estimate_richness(fGA.Qnf2, measures="Observed")), xlab="Taxonomy Not Assigned to Genus Level", ylab="Taxonomy Assigned to Genus Level")
+abline(alpha$coefficients)
+#text(200,500, expression(y == 96.615008 + 0.3566934*x))
 
 # just sequencing effort (for dissertation):
 # run as log because it reduces the structure of the residuals ...
@@ -668,6 +805,8 @@ divVar
 # sanity check: list uniuqe primary liftestyles:
 unique(as.data.frame(as.matrix(tax_table(fGA.Ql)))$primary_lifestyle)
 
+
+all.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="wood_saprotroph"|primary_lifestyle=="soil_saprotroph"|primary_lifestyle=="unspecified_saprotroph"|primary_lifestyle=="dung_saprotroph"|primary_lifestyle=="nectar/tap_saprotroph"|primary_lifestyle=="pollen_saprotroph")
 p.path<-subset_taxa(fGA.Ql, primary_lifestyle=="plant_pathogen")
 soil.sap<-subset_taxa(fGA.Ql, primary_lifestyle=="soil_saprotroph")
 an.par<-subset_taxa(fGA.Ql, primary_lifestyle=="animal_parasite")
@@ -694,6 +833,7 @@ myc<-subset_taxa(fGA.Ql, Growth_form_template=="filamentous_mycelium")
 yeast<-subset_taxa(fGA.Ql, Growth_form_template=="yeast")
 
 # richness of each group
+all.sap.r<-unlist(estimate_richness(all.sap, measures="Observed"))
 p.path.r<-unlist(estimate_richness(p.path, measures="Observed"))
 soil.sap.r<-unlist(estimate_richness(soil.sap, measures="Observed"))
 an.par.r<-unlist(estimate_richness(an.par, measures="Observed"))
@@ -721,7 +861,8 @@ yeast.r<-unlist(estimate_richness(yeast, measures="Observed"))
 tot.r<-unlist(estimate_richness(fGA.Ql, measures="Observed"))
 
 
-div.df<-data.frame(p.path.r,
+div.df<-data.frame(all.sap.r,
+                   p.path.r,
                    soil.sap.r,
                    an.par.r,
                    wood.sap.r,
@@ -751,6 +892,8 @@ div.df<-data.frame(p.path.r,
                    "seqs"=as.numeric(as.character(f.meta$SeqDepth)))
 
 # plot and statistics of abundance of each group by sequences, depth and treatment
+with(div.df,boxplot(all.sap.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="all saprotroph Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
+with(div.df,summary(aov(lm(all.sap.r~seqs+depth*treatment))))
 
 with(div.df,boxplot(p.path.r~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Plant Pathogen Diversity", ylab="Taxa", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8)))
 with(div.df,summary(aov(lm(p.path.r~seqs+depth*treatment))))
@@ -831,35 +974,6 @@ with(div.df,summary(aov(lm(tot.r~seqs+depth*treatment))))
 # add dimorphic yeasts !! ####
 
 # table of mean (+/- se) for diversity for groups
-# return to this later!
-library(qwraps2)
-library(dplyr)
-#as_tibble(div.df) %>% 
-summary.divdf<-dplyr::group_by(div.df, depth,treatment) %>% 
-  summarise(across(.cols = where(is.numeric), .fns = list(Mean = mean, SD = sd), na.rm = TRUE, .names = "{col}_{fn}")) # throwing an error now ... not sure why ...
-summary.divdf2<-as.data.frame(summary.divdf)
-summary.divdf3<-data.frame("treatment"=summary.divdf2$treatment,
-                           "depth"=summary.divdf2$depth,
-                           "plant pathogen"=paste(summary.divdf2$p.path.r_Mean, " (",round(summary.divdf2$p.path.r_SD, digits=2), ")"),
-                           "Soil saprotroph"=paste(summary.divdf2$soil.sap.r_Mean, " (",round(summary.divdf2$soil.sap.r_SD,digits=2), ")"),
-                           "animal parasite"=paste(summary.divdf2$an.par.r_Mean, " (",round(summary.divdf2$an.par.r_SD,digits=2), ")"),
-                           "wood saprotroph"=paste(summary.divdf2$wood.sap.r_Mean, " (",round(summary.divdf2$wood.sap.r_SD,digits=2), ")"),
-                           "mycoparasite"=paste(summary.divdf2$myco.par.r_Mean, " (",round(summary.divdf2$myco.par.r_SD,digits=2), ")"),
-                           "unsp. saprotroph"=paste(summary.divdf2$unsp.sap.r_Mean, " (",round(summary.divdf2$unsp.sap.r_SD,digits=2), ")"),
-                           "litter saprotroph"=paste(summary.divdf2$litter.sap.r_Mean, " (",round(summary.divdf2$litter.sap.r_SD,digits=2), ")"),
-                           "dung saprotroph"=paste(summary.divdf2$dung.sap.r_Mean, " (",round(summary.divdf2$dung.sap.r_SD,digits=2), ")"),
-                           "arbuscular myc."=paste(summary.divdf2$AMF.r_Mean, " (",round(summary.divdf2$AMF.r_SD,digits=2), ")"),
-                           "foliar endophyte"=paste(summary.divdf2$fol.end.r_Mean, " (",round(summary.divdf2$fol.end.r_SD,digits=2), ")"),
-                           "nectar saprotroph"=paste(summary.divdf2$nect.sap.r_Mean, " (",round(summary.divdf2$nect.sap.r_SD,digits=2), ")"),
-                           "pollen saprotroph"=paste(summary.divdf2$pollen.sap.r_Mean, " (",round(summary.divdf2$pollen.sap.r_SD,digits=2), ")"),
-                           "lichen parasite"=paste(summary.divdf2$lich.par.r_Mean, " (",round(summary.divdf2$lich.par.r_SD,digits=2), ")"),
-                           "Ectomycorrhiza"=paste(summary.divdf2$ECM.r_Mean, " (",round(summary.divdf2$ECM.r_SD,digits=2), ")"),
-                           "unsp. pathogen"=paste(summary.divdf2$unsp.path.r_Mean, " (",round(summary.divdf2$unsp.path.r_SD,digits=2), ")"),
-                           "epiphyte"=paste(summary.divdf2$epi.r_Mean, " (",round(summary.divdf2$epi.r_SD,digits=2), ")"),
-                           "algal parasite"=paste(summary.divdf2$alg.par.r_Mean, " (",round(summary.divdf2$alg.par.r_SD,digits=2), ")"),
-                           "soot mold"=paste(summary.divdf2$soot.mold.r_Mean, " (", round(summary.divdf2$soot.mold.r_SD,digits=2), ")"))
-
-View(summary.divdf3)
 
 # table of mean (+/- se) for abundance of groups ####
 
@@ -895,8 +1009,6 @@ fGA.Qf.5<-filter_taxa(fGA.Q.5, function(x) sum(x > 3) > 5, TRUE)
 fGA.Qf.10<-filter_taxa(fGA.Q.10, function(x) sum(x > 3) > 5, TRUE)
 fGA.Qf.Ap<-filter_taxa(fGA.Q.Ap, function(x) sum(x > 3) > 5, TRUE)
 fGA.Qf.30<-filter_taxa(fGA.Q.30, function(x) sum(x > 3) > 5, TRUE)
-
-
 # network analysis ####
 
 #fGA.Q.5<-phyloseq::index_reorder(fGA.Q.5, index_type="both")
@@ -917,14 +1029,14 @@ fD.associationSummary<-matrix(nrow=4, ncol=2)
 rownames(fD.associationSummary)<-c("D5", "D10", "DAp", "D30")
 colnames(fD.associationSummary)<-c("Positive", "Negative")
 
-fD.associationSummary[1,1]<-sum(f.5net>0.5 & f.5net<1)
-fD.associationSummary[2,1]<-sum(f.10net>0.5 & f.10net<1)
-fD.associationSummary[3,1]<-sum(f.Anet>0.5 & f.Anet<1)
-fD.associationSummary[4,1]<-sum(f.30net>0.5 & f.30net<1)
-fD.associationSummary[1,2]<-sum(-0.5>f.5net)
-fD.associationSummary[2,2]<-sum(-0.5>f.10net)
-fD.associationSummary[3,2]<-sum(-0.5>f.Anet)
-fD.associationSummary[4,2]<-sum(-0.5>f.30net)
+fD.associationSummary[1,1]<-sum(f.5net>0.2 & f.5net<1)
+fD.associationSummary[2,1]<-sum(f.10net>0.2 & f.10net<1)
+fD.associationSummary[3,1]<-sum(f.Anet>0.2 & f.Anet<1)
+fD.associationSummary[4,1]<-sum(f.30net>0.2 & f.30net<1)
+fD.associationSummary[1,2]<-sum(-0.2>f.5net)
+fD.associationSummary[2,2]<-sum(-0.2>f.10net)
+fD.associationSummary[3,2]<-sum(-0.2>f.Anet)
+fD.associationSummary[4,2]<-sum(-0.2>f.30net)
 fD.associationSummary
 
 
@@ -983,12 +1095,12 @@ fFS.associationSummary<-matrix(nrow=3, ncol=2)
 rownames(fFS.associationSummary)<-c("NT", "CT", "Org")
 colnames(fFS.associationSummary)<-c("Positive", "Negative")
 
-fFS.associationSummary[1,1]<-sum(f.NTnet>0.5 & f.NTnet<1)
-fFS.associationSummary[2,1]<-sum(f.CTnet>0.5 & f.CTnet<1)
-fFS.associationSummary[3,1]<-sum(f.Org3net>0.5 & f.Org3net<1)
-fFS.associationSummary[1,2]<-sum(-0.5>f.NTnet)
-fFS.associationSummary[2,2]<-sum(-0.5>f.CTnet)
-fFS.associationSummary[3,2]<-sum(-0.5>f.Org3net)
+fFS.associationSummary[1,1]<-sum(f.NTnet>0.2 & f.NTnet<1)
+fFS.associationSummary[2,1]<-sum(f.CTnet>0.2 & f.CTnet<1)
+fFS.associationSummary[3,1]<-sum(f.Org3net>0.2 & f.Org3net<1)
+fFS.associationSummary[1,2]<-sum(-0.2>f.NTnet)
+fFS.associationSummary[2,2]<-sum(-0.2>f.CTnet)
+fFS.associationSummary[3,2]<-sum(-0.2>f.Org3net)
 fFS.associationSummary
 
 p.guild.int.NT<-ismatrix(f.NTnet, fQ.NTf, "P")
@@ -1032,49 +1144,52 @@ corrplot::corrplot(f.Org3net, method="color",
                    title="Org3")
 
 # network analysis!!!n####
-colrs<-c("#FF0000", "#FF9900", "#CCFF00", "#33FF00", "#00FF66", "#00FFFF", "#0066FF", "#3300FF", "#CC00FF", "#FF0099","#4DAF4A", "#7FC97F", "#7570B3", "#CCCCCC")
-group<-as.data.frame(as.matrix(tax_table(fQ.NTf)))$primary_lifestyle
-c<-f.NTnet*(f.NTnet>0.2 + (-0.2 > f.NTnet))
+
+c<-f.NTnet#*(f.NTnet>0.2 + (-0.2 > f.NTnet))
+c[c>(-.3)&c<0.3]<-0
 #sum(c)
 n<-graph_from_incidence_matrix(c, directed=T, mode="out")
 #cfg<-(n)
-V(n)$color<-colrs[as.factor(group)]
-
 n<-delete.vertices(simplify(n), degree(n)==0)
-l<-layout_with_dh(n)
-l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
-plot(n,vertex.label=NA, main="NT", vertex.size=5, edge.arrow.size=0.5, 
+E(n)$color <- ifelse(E(n)$weight > 0,'navy','maroon')
+#l<-layout_with_dh(n)
+#l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
+#plot(n,vertex.label=NA, main="NT", vertex.size=5, edge.arrow.size=0.5, 
      #rescale=F, 
-     layout=l#,
+#     layout=l#,
      #vertex.color=colrs[as.factor(group)]
-     )
+  #   )
 
 
-c2<-f.CTnet*(f.CTnet>0.2 + (-0.2 > f.CTnet))
-sum(c2)
+c2<-f.CTnet#*(f.CTnet>0.2 + (-0.2 > f.CTnet))
+c2[c2>(-.3)&c2<0.3]<-0
+#sum(c2)
 n2<-graph_from_incidence_matrix(c2, directed=T, mode="out")
 
 #cfg<-(n)
 n2<-delete.vertices(simplify(n2), degree(n2)==0)
-l<-layout_with_dh(n2)
-l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
-plot(n2,vertex.label=NA, main="CT", vertex.size=5, edge.arrow.size=0.5, 
+E(n2)$color <- ifelse(E(n2)$weight > 0,'navy','maroon')
+#l<-layout_with_dh(n2)
+#l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
+#plot(n2,vertex.label=NA, main="CT", vertex.size=5, edge.arrow.size=0.5) 
      #rescale=F, 
-     layout=l)
+#     layout=l)
 
-closeness(n2)
+#closeness(n2)
 hist(degree(n2))
-tc <- cluster_walktrap(n2)
-modularity(n2, unlist(tc))
+#tc <- cluster_walktrap(n2)
+#modularity(n2, unlist(tc))
 
-c3<-f.Org3net*(f.Org3net>0.2 + (-0.2 > f.Org3net))
-#sum(c3)
+c3<-f.Org3net
+c3[c3>(-.1)&c3<0.1]<-0
+#sum(c3)0.1
 n3<-graph_from_incidence_matrix(c3, directed=T, mode="out")
 n3<-delete.vertices(simplify(n3), degree(n3)==0)
 l<-layout_with_dh(n3)
 l <- norm_coords(l, ymin=-1, ymax=1, xmin=-1, xmax=1)
+E(n3)$color <- ifelse(E(n3)$weight > 0,'navy','maroon')
 
-plot(n3, vertex.label=NA, main="ORG", vertex.size=5,edge.arrow.size=0.5)
+#plot(n3, vertex.label=NA, main="ORG", vertex.size=5,edge.arrow.size=0.5)
 
 data.frame(as.matrix(tax_table(fQ.ORGf)))[rownames(as.data.frame(as.matrix(tax_table(fQ.ORGf))))==names(c3)[colSums(c3)==max(colSums(c3))],] #find max 
 stest<-subset_taxa(fGA.Qlf, Genus=="g__Atractium" & Species=="s__crassum")
@@ -1088,6 +1203,7 @@ View(as.data.frame(as.matrix(sample_data(stest))))
 
 library(dplyr)
 library(stringr)
+library(RColorBrewer)
 mdf<-as.data.frame(as.matrix(tax_table(fGA.Qlf)))
 mdf$id<-rownames(mdf)
 mdf$id<-as.character(mdf$id)
@@ -1095,6 +1211,8 @@ mdf$id<-as.character(mdf$id)
 plotIgraphNet<-function(net, ps, main){
   require(RColorBrewer)
   require(igraph)
+  require(phyloseq)
+  require(dplyr)
   mdf<-as.data.frame(as.matrix(tax_table(ps)))
   mdf$id<-rownames(mdf)
   mdf$id<-as.character(mdf$id)
@@ -1104,18 +1222,86 @@ plotIgraphNet<-function(net, ps, main){
                                      value = sapply(V(net)$name, function(x){
                                        mdf$primary_lifestyle[mdf$id==x]
                                      }))
+  l<-layout_with_dh(updatedn2)
   nb.cols<-length(unique(V(updatedn2)$primary_lifestyle))
   mycolors <- colorRampPalette(brewer.pal(8, "Set3"))(nb.cols)
   coul<-mycolors[as.numeric(as.factor(V(updatedn2)$primary_lifestyle))]
-  plot(updatedn2, vertex.label=NA, main=main, vertex.size=5,edge.arrow.size=0.5,vertex.color=coul)
+  plot(updatedn2, #layout=l,
+       laout=layout.bipartite,
+       vertex.label=NA, main=main, vertex.size=5,edge.arrow.size=0.5,vertex.color=coul)
   legend("bottomleft", legend=levels(as.factor(V(updatedn2)$primary_lifestyle)), col = mycolors, bty = "n", text.col=mycolors, horiz = FALSE)
+  updatedn2
 }
 
-plotIgraphNet(n, fGA.Qlf, main="NT")
-plotIgraphNet(n2, fGA.Qlf, main="CT")
-plotIgraphNet(n3, fGA.Qlf, main="ORG")
+plotIgraphNet(n, fQ.NTf, main="NT")
+plotIgraphNet(n2, fQ.CTf, main="CT")
+plotIgraphNet(n3, fQ.ORGf, main="ORG")
 
 # guild questions:
+
+# occurence vs target plots ####
+# plot total # of samples in which a taxon occures against the number of taxa that predict at least 30% of it's abundance
+
+test<-as.data.frame(as.matrix(otu_table(fQ.NTf)))
+test<-as.matrix(test)
+logi<-test==0
+logi2<-test>0 # do this for associatio matrix as well
+vec<-rowSums(logi2)/48
+# make a function to iterate this over the association matrix
+vec2<-rowSums(c)
+vec3<-colSums(c)
+plot(vec, vec2) # plot number of associations that meet threshold by incidence
+# function to plot the abundance and prevalence against the number of significant predictors
+# ps is phyloseq object; mat is association matrix 
+runplots1<-function(ps, mat){
+  otu<-as.data.frame(as.matrix(otu_table(ps)))
+  otu<-as.matrix(otu)
+  otu.logi<-otu>0
+  vec1<-rowSums(otu)/ncol(otu)
+  vec2<-rowSums(otu.logi)/ncol(otu.logi)
+  vec3<-rowSums(mat!=0)
+  vec4<-colSums(mat!=0)
+  df<-data.frame("Occurence" = vec2, "Abundance" = vec1, "Number.of.Targets" = vec3, "Number.of.Origins" = vec4)
+  with(df, plot(jitter(Abundance), jitter(Number.of.Targets), main = "abundance vs targets" ))
+  with(df, plot(jitter(Abundance), jitter(Number.of.Origins), main = "abundance vs origins" ))
+  with(df, plot(jitter(Occurence), jitter(Number.of.Targets), main = "occurence vs targets" ))
+  with(df, plot(jitter(Occurence), jitter(Number.of.Origins), main = "occurence vs origins" ))
+  
+  hist(vec1)
+  hist(vec2)
+  hist(vec3, breaks=15)
+  hist(vec4, breaks=15)
+}
+runplots1(fQ.NTf, c)
+runplots1(fQ.CTf, c2)
+runplots1(fQ.ORGf, c3)
+test<-as.data.frame(as.matrix(otu_table(fQ.CTf)))
+test<-as.matrix(test)
+logi<-test==0
+logi2<-test>0 # do this for associatio matrix as well
+vec<-rowSums(logi2)/48
+# make a function to iterate this over the association matrix
+vec2<-rowSums(c2)
+vec3<-colSums(c2)
+plot(vec, vec2)
+# then plot number of associations that meet the threshold by abundance
+test<-as.data.frame(as.matrix(otu_table(fQ.ORGf)))
+test<-as.matrix(test)
+logi<-test==0
+logi2<-test>0 # do this for associatio matrix as well
+vec1<-rowSums(logi2)/48
+vec2<-rowSums(test)/ncol(test)
+# make a function to iterate this over the association matrix
+vec3<-rowSums(c3)
+vec4<-colSums(c3)
+plot(jitter(vec), xz)
+plot(jitter(vec), vec3)
+# abundance vs target plots
+# plot mean abu
+
+# occurence vs origination plots
+# abundance vs origination plots
+
 
 # main effect of farming system ####
 t1<-Sys.time()
@@ -1136,8 +1322,13 @@ n.guild.int.O3<-ismatrix(f.Org3fs, fQ.ORGf, "N")
 
 # filter taxa for abundance analysis ####
 
-fGA.Qlf<-filter_taxa(fGA.Ql, function(x) sum(x > 3) > 5, TRUE)
-
+fGA.Qlf<-filter_taxa(fGA.Ql, function(x) sum(x > 3) > 10, TRUE)
+mp.lifestyle<-tax_glom(fGA.Qlf, taxrank = "primary_lifestyle")
+mp.lifestyletax<-as.data.frame(as.matrix(tax_table(mp.lifestyle)))
+mp.lifestyletax<-mp.lifestyletax[,c(1,8)]
+tax_table(mp.lifestyle)<-tax_table(as.matrix(mp.lifestyletax))
+mp.lifestyle<-tax_glom(mp.lifestyle, taxrank = "primary_lifestyle")
+total.sap<-subset_taxa(fGA.Qlf,primary_lifestyle=="soil_saprotroph"|primary_lifestyle=="wood_saprotroph"|primary_lifestyle=="unspecified_saprotroph"|primary_lifestyle=="litter_saprotroph"|primary_lifestyle=="dung_saprotroph"|primary_lifestyle=="nectar/tap_saprotroph"|primary_lifestyle=="pollen_saprotroph")
 mp.path<-subset_taxa(fGA.Qlf, primary_lifestyle=="plant_pathogen")
 msoil.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="soil_saprotroph")
 man.par<-subset_taxa(fGA.Qlf, primary_lifestyle=="animal_parasite")
@@ -1154,12 +1345,12 @@ mpollen.sap<-subset_taxa(fGA.Qlf, primary_lifestyle=="pollen_saprotroph")
 mlich.par<-subset_taxa(fGA.Qlf, primary_lifestyle=="lichen_parasite")
 mECM<-subset_taxa(fGA.Qlf, primary_lifestyle=="ectomycorrhizal")
 munsp.path<-subset_taxa(fGA.Qlf, primary_lifestyle=="unspecified_pathotroph")
-mepi<-subset_taxa(fGA.Qlf, primary_lifestyle=="epiphyte")
+#mepi<-subset_taxa(fGA.Qlf, primary_lifestyle=="epiphyte")
 malg.par<-subset_taxa(fGA.Qlf, primary_lifestyle=="algal_parasite")
 msoot.mold<-subset_taxa(fGA.Qlf, primary_lifestyle=="sooty_mold")
 #munknown<-subset_taxa(fGA.Qlf, primary_lifestyle=="unspecified")
 #mlichenized<-subset_taxa(fGA.Qlf, primary_lifestyle=="lichenized")
-mepiphyte<-subset_taxa(fGA.Qlf, primary_lifestyle=="epiphyte")
+
 # sample sums by category
 # this function makes a plot of abundance by farming system and depth
 # it also runs an anova to test difference in abundance by factor categories
@@ -1182,15 +1373,31 @@ maineffects<-function(ps){
   f.meta$B.Density_gcm3<-as.numeric(as.character(f.meta$B.Density_gcm3))
   
   
-  print(summary(aov(glm(unlist(sample_sums(ps))~f.meta$SeqDepth+f.meta$Depth*f.meta$Treatment+f.meta$pH+f.meta$C_percent*f.meta$N_percent+f.meta$No3_ugPerg+f.meta$Nh4_ugPerg+f.meta$Clay_percent+f.meta$Sand_percent+f.meta$Silt_percent+f.meta$B.Density_gcm3))))
+  print(summary(aov(glm(unlist(sample_sums(ps))~f.meta$Depth*f.meta$Treatment+f.meta$pH+f.meta$C_percent*f.meta$N_percent+f.meta$No3_ugPerg+f.meta$Nh4_ugPerg+f.meta$Clay_percent+f.meta$Sand_percent+f.meta$Silt_percent+f.meta$B.Density_gcm3))))
   
   boxplot(unlist(sample_sums(ps))~f.meta$Depth*f.meta$Treatment,las=2, xlab=NULL,cex.names=0.1)
-  
-#  plot_bar(ps, x="Treatment", fill="Species", facet_grid="Depth")+geom_bar(aes(color=Species, fill=Species), stat="identity", position="stack")
+  o<-glm(unlist(sample_sums(ps))~f.meta$Depth*f.meta$Treatment+f.meta$pH+f.meta$C_percent*f.meta$N_percent+f.meta$No3_ugPerg+f.meta$Nh4_ugPerg+f.meta$Clay_percent+f.meta$Sand_percent+f.meta$Silt_percent+f.meta$B.Density_gcm3)
+  o
 }
 
+# calculate main effects of taxa within groups
+calc.maineffects<-function(list){
+  o<-base::lapply(list, taxmodel)
+  o
+}
+# calculate main effects of overall groups
+calc.maineffectsgroup<-function(list){
+  o<-base::lapply(list, maineffects)
+  o
+}
 
-# determine significance of treatment...
+lifestyle.list<-list(total.sap,mp.path,msoil.sap,man.par,mwood.sap,mmyco.par,munsp.sap,mlitter.sap,mdung.sap,mAMF,mfol.end,mnect.sap,mpollen.sap,mlich.par,mECM,munsp.path,malg.par,msoot.mold)
+
+glifestyle.stats<-calc.maineffectsgroup(lifestyle.list)
+tlifestyle.stats<-calc.maineffects(lifestyle.list)
+# determine significance of treatment...####
+maineffects(mp.lifestyle)
+maineffects(total.sap)
 maineffects(mp.path)
 maineffects(msoil.sap)
 maineffects(man.par)
@@ -1210,7 +1417,11 @@ maineffects(malg.par)
 maineffects(mepi)
 maineffects(msoot.mold)
 maineffects(mepiphyte)
+
+# run tax model ####
 t1<-Sys.time()
+total.sp<-taxmodel(fGA.Qlf)
+total.lifestyle<-taxmodel(mp.lifestyle)
 emp.path<-taxmodel(mp.path)
 emsoil.sap<-taxmodel(msoil.sap)
 eman.par<-taxmodel(man.par)
@@ -1241,19 +1452,98 @@ plotdiff<-function(x){
   for(i in 1:length(x$tab)){
     n[i]<-x$tab[[i]]$`Pr(>F)`[2]
   }
-  par(mar=c(10, 4, 4, 2) + 0.1)
-  barplot(t(x$effectDF[n<0.05,]), beside = T, las=2)
+  #par(mar=c(10, 4, 4, 2) + 0.1)
+  bp<-as.data.frame(x$effectDF[n<0.05,])
+  CT<-as.numeric(as.character(bp$CT))
+  ORG<-as.numeric(as.character(bp$ORG))
+  names<-rownames(bp)
+  bp<-data.frame(CT, ORG)
+  rownames(bp)<-names
+  barplot(t(bp), beside = T, las=2, density=30, angle=50, legend=T)
+  #legend("topright", legend=colnames(x$effectDF), fill=grey.colors(2))
+  abline(0,0)
 }
 
-plotdiff(emp.path)
+# plot 2.1 ####
+# adding coloring to the border of the species plot by lifestyle 
+# select top 8 effects
+plotdiff2<-function(x){
+  n<-c(rep(0, length(x$tab)))
+  for(i in 1:length(x$tab)){
+    n[i]<-x$tab[[i]]$`Pr(>F)`[2]
+  }
+  
+  bp<-as.data.frame(x$effectDF[n<0.05,])
+  CT<-as.numeric(as.character(bp$CT))
+  ORG<-as.numeric(as.character(bp$ORG))
+  names<-bp$Lifestyle
+  bp<-data.frame(CT, ORG)
+  rownames(bp)<-names
+  nb.cols<-length(unique(names))
+  mycolors <- colorRampPalette(brewer.pal(4, "PuOr"))(nb.cols)
+  coul<-mycolors[as.factor(names)]
+  #par(mar=c(10, 4, 4, 2) + 0.1)
+  barplot(t(as.matrix(bp)), beside = T, las=2, density=30, angle=50, legend=T) #border=rep(coul, each=2))
+  #legend("topright", legend=unique(bp$Lifestyle), fill=coul)
+  #legend("topright", legend=colnames(bp[,c(1,2)]), fill=grey.colors(2), border=coul)
+  abline(0,0)
+}
+plotdiff2(total.lifestyle)
+total.lifestyle$fit
+
+# plot 2.2 ####
+
 plotdiff(emsoil.sap)
+# plot 2.3 ####
+plotdiff(emp.path)
+# plot 2.4 ####
+
+plotdiff(emAMF)
+# plot 2.5 ####
 plotdiff(eman.par)
+
+# plot 4 total spp biplots vs unknowns####
+# color species by known group association
+plotdiff3<-function(x){
+  n<-c(rep(0, length(x$tab)))
+  for(i in 1:length(x$tab)){
+    n[i]<-x$tab[[i]]$`Pr(>F)`[2]
+  }
+  
+  bp<-as.data.frame(x$effectDF[n<0.05,])
+  #rownames(bp)<-bp$SciNames
+  bp$CT<-as.numeric(as.character(bp$CT))
+  bp$ORG<-as.numeric(as.character(bp$ORG))
+  bp$Lifestyle<-as.character(bp$Lifestyle)
+  bp$Lifestyle[bp$Lifestyle=="soil_saprotroph"|bp$Lifestyle=="wood_saprotroph"|bp$Lifestyle=="litter_saprotroph"|bp$Lifestyle=="dung_saprotroph"|bp$Lifestyle=="unspecified_saprotroph"|bp$Lifestyle=="nectar/tap_saprotroph"|bp$Lifestyle=="pollen_saprotroph"]<-"Saprotroph"
+  bp$Lifestyle[bp$Lifestyle=="plant_pathogen"]<-"Plant Pathogen"
+  bp$Lifestyle[bp$Lifestyle=="animal_parasite"]<-"Animal Parasite"
+  bp$Lifestyle[bp$Lifestyle=="arbuscular_mycorrhizal"|bp$Lifestyle=="ectomycorrhizal"]<-"Mutualist"
+  bp$Lifestyle[bp$Lifestyle=="algal_parasite"|bp$Lifestyle=="unspecified_pathotroph"|bp$Lifestyle=="foliar_endophyte"|bp$Lifestyle=="mycoparasite"]<-"Other"
+  #bp<-data.frame(CT, ORG, names)
+  #rownames(bp)<-names
+  nb.cols<-length(unique(bp$Lifestyle))
+  mycolors <- colorRampPalette(brewer.pal(4, "PuOr"))(nb.cols)
+  coul<-mycolors[as.factor(bp$Lifestyle)]
+  #par(mar=c(10, 4, 4, 2) + 0.1)
+  barplot(t(as.matrix(bp[,c(1,2)])), beside = T, las=2, density=30, angle=50, legend=T, border=rep(coul, each=2))
+  legend("topright", legend=unique(bp$Lifestyle), fill=unique(coul))
+  #legend("topright", legend=colnames(bp[,c(1,2)]), fill=grey.colors(2), border=coul)
+  abline(0,0)
+}
+
+
+plotdiff2(total.sp)
+plotdiff3(total.sp) # changed taxmodel to include genus names on all
+
+# figure 4.2 unknown spp models ####
+
 plotdiff(emwood.sap)
 plotdiff(emmyco.par)
 plotdiff(emunsp.sap)
 plotdiff(emlitter.sap)
 plotdiff(emdung.sap)
-plotdiff(emAMF)
+
 plotdiff(emfol.end) 
 plotdiff(emnect.sap)
 plotdiff(empollen.sap)
@@ -1263,6 +1553,11 @@ plotdiff(emunsp.path) # only one significant
 plotdiff(emalg.par) # only one sigificant
 plotdiff(emepi) # none
 plotdiff(emsoot.mold) # none
+
+
+# unknowns abundance by farming system ####
+unknowns<-maineffects(fGA.Qnf)
+unknowns$coefficients
 
 # plot the relative effect size for each of the significant taxa
 # significant taxa by farming system
@@ -1449,7 +1744,7 @@ hist(sample(b.int, 1000, replace=F))
 
 
 # model species by farming system ####
-fGA.Qlf<-filter_taxa(fGA.Ql, function(x) sum(x > 3) > 5, TRUE)
+fGA.Qlf<-filter_taxa(fGA.Ql, function(x) sum(x > 3) > 10, TRUE)
 t1<-Sys.time()
 mtax.fun<-taxmodel(fGA.Qlf)
 Sys.time()-t1 # 10.7 seconds
@@ -2141,3 +2436,168 @@ sppInt<-function(d){
   
   
 }
+
+
+taxmodel2<-function(d){ 
+  # input is phyloseq object
+  # already normalized
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  d3<-as.data.frame(as.matrix(tax_table(d)))
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  if(!identical(colnames(d1), rownames(d3))){stop("tax table not in correct order")}
+  treatment<-as.factor(d2$Treatment)
+  effort<-as.numeric(as.character(d2$SeqDepth))
+  depth<-as.factor(d2$Depth)
+  depth<-factor(depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
+  treatment<-factor(treatment, levels=c("NT", "CT", "Org3"))
+  pH<-as.numeric(as.character(d2$pH))
+  Cpercent<-as.numeric(as.character(d2$C_percent))
+  Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+  Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+  Clay<-as.numeric(as.character(d2$Clay_percent))
+  Silt<-as.numeric(as.character(d2$Silt_percent))
+  CN_ratio<-as.numeric(as.character(d2$C_N_ratio))
+  N_percent<-as.numeric(as.character(d2$N_percent))
+  Sand<-as.numeric(as.character(d2$Sand_percent))
+  B.Density<-as.numeric(as.character(d2$B.Density_gcm3))
+  species<-as.character(d3$Species)
+  QPCR<-as.numeric(as.character(d2$Fun_QPCR))
+  out<-NULL
+  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort*QPCR+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
+  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort*QPCR+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
+  out$fit<-list(1:length(ncol(d1)))
+  out$plots<-list(1:length(ncol(d1)))
+  colnames(out$predicted)<-colnames(d1)
+  for(i in c(1:ncol(d1))){
+    fit<-NULL
+    fit <- glm(d1[,i] ~ effort*QPCR+treatment*pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian")
+    
+    out$residuals[,i]<-residuals(fit)
+    out$predicted[,i]<-predict(fit)
+    out$fit[[i]]<-fit
+    out$tab[[i]]<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+    out$plots[[i]]<-boxplot(d1[,i]~depth + treatment, las=2, xlab=NULL,cex.names=0.1, ylab="Abundance",main=species[i], names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+  }
+  out$predcor<-cor(out$predicted, use="pairwise.complete.obs")
+  out$spcor<-cor(d1, use="pairwise.complete.obs")
+  #out$hc<-hclust(out$cor, method="ward.D")
+  # regress for combined value of original data
+  # get residuals of the regression
+  # correlate the residuals
+  rownames(out$spcor)<-colnames(d1)
+  colnames(out$spcor)<-colnames(d1)
+  rownames(out$predcor)<-colnames(d1)
+  colnames(out$predcor)<-colnames(d1)
+  names(out$tab)<-colnames(d1)
+  names(out$fit)<-colnames(d1)
+  names(out$plots)<-as.character(d3$Species)
+  
+  out$effectDF<-matrix(nrow=ncol(d1), ncol=2)
+  rownames(out$effectDF)<-as.character(d3$Species)
+  colnames(out$effectDF)<-c("CT", "ORG")
+  for(i in 1:nrow(out$effectDF)){
+    out$effectDF[i,1]<-out$fit[[i]]$coefficients["treatmentCT"]
+    out$effectDF[i,2]<-out$fit[[i]]$coefficients["treatmentOrg3"]
+    
+    # out$effectDF[i,1]<-out$fit[[i]]$coefficients["treatmentCT"]/out$fit[[i]]$coefficients["(Intercept)"]
+    #  out$effectDF[i,2]<-out$fit[[i]]$coefficients["treatmentOrg3"]/out$fit[[i]]$coefficients["(Intercept)"]
+  }
+  
+  
+  out
+}
+testdf<-taxmodel2(fGA.Qlf)
+
+# compare model construction for covariance matrix
+get.no4<-function(v, d2, d1){
+  tax1<-as.numeric(as.character(v))
+  o<-c(rep(NA,length(d1)))
+  for(i in 1:length(d1)){
+    tax2<-NULL
+    fit<-NULL
+    tab<-NULL
+    tax2<-as.numeric(as.character(d1[,i]))
+    effort<-as.numeric(as.character(d2$SeqDepth))
+    QPCR<-as.numeric(as.character(d2$Fun_QPCR))
+    treatment<-as.factor(d2$Treatment)
+    depth<-as.factor(d2$Depth)
+    pH<-as.numeric(as.character(d2$pH))
+    Cpercent<-as.numeric(as.character(d2$C_percent))
+    Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
+    Nitrate<-as.numeric(as.character(d2$No3_ugPerg))
+    Clay<-as.numeric(as.character(d2$Clay_percent))
+    Silt<-as.numeric(as.character(d2$Silt_percent))
+    CN_ratio<-as.numeric(as.character(d2$C_N_ratio))
+    N_percent<-as.numeric(as.character(d2$N_percent))
+    Sand<-as.numeric(as.character(d2$Sand_percent))
+    B.Density<-as.numeric(as.character(d2$B.Density_gcm3))
+    fit <- glm(tax1 ~ effort*QPCR+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density+tax2*treatment,family="gaussian")
+    tab<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+    o[i]<-tab$varExplained[15]*(fit$coefficients[19]/abs(fit$coefficients[19]))/100
+    
+  }
+  o
+}
+sppInt4<-function(d){
+  require(foreach)
+  require(doParallel)
+  require(phyloseq)
+  # prepare data
+  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+ 
+  out<-do.call(cbind, mclapply(d1, get.no4, d2, d1, mc.preschedule = T, mc.cores=10, mc.cleanup = T))
+  rownames(out)<-colnames(out)
+  tm<-as.data.frame(as.matrix(tax_table(d)))
+  tmOrder<-rownames(tm) #tm$Class, tm$Order, 
+  if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+  tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+  out<-out[as.character(tmOrder1), as.character(tmOrder1)]
+  out
+  out
+  
+  
+}
+
+test<-sppInt4(fGA.Qlf)
+test[is.na(test)]<-0
+
+corrplot::corrplot(test, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="test")
+max(test)
+hist(test)
+c<-test
+c1<-c
+c2<-c
+c1[-.15<c1]<-0
+c2[c2<0.15]<-0
+
+#*(test>0.1 + (-0.1 > test))
+n4<-graph_from_incidence_matrix(c2, directed=T, mode="out", weighted=T)
+n4<-delete.vertices(simplify(n4), degree(n4)==0)
+E(n4)$color <- ifelse(E(n4)$weight > 0,'navy','maroon')
+n4<-plotIgraphNet(n4, fGA.Qlf, main="total network")
+runplots1(fGA.Qlf, c)
+d<-degree(n4, mode="in", loops=F)
+degree_distribution(n4, mode="in", loops=F)
+barplot(degree_distribution(n4, mode="in", loops=F),names=as.character(c(0:(length(degree_distribution(n4, mode="in", loops=F))-1))), main="In degree distribution")
+barplot(degree_distribution(n4, mode="out", loops=F), names=as.character(c(0:(length(degree_distribution(n4, mode="out", loops=F))-1))), main="Out degree distribution")
+V(n4)$primary_lifestyle[V(n4)$name==c(V(n4)$name[degree(n4, mode="in")==top_n(degree(n4, mode="in"), 15)]]
+
+nb.cols<-length(unique(V(n4)$primary_lifestyle))
+mycolors <- colorRampPalette(brewer.pal(8, "Set3"))(nb.cols)
+coul<-mycolors[as.numeric(as.factor(V(n4)$primary_lifestyle))]
+
+#legend("bottomleft", legend=levels(as.factor(V(updatedn2)$primary_lifestyle)), col = mycolors, bty = "n", text.col=mycolors, horiz = FALSE)
+
+
+plot(jitter(degree(n4, mode= "in")),jitter(degree(n4, mode = "out")), col = coul, pch=16)
+legend("topright", legend=levels(as.factor(V(n4)$primary_lifestyle)), col = mycolors, bty = "n", text.col=mycolors, horiz = F, cex=0.75)
+
+# test effect of farming system on covariance matrix
