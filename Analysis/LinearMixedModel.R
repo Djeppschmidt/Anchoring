@@ -512,7 +512,7 @@ b.meta$bacteria<-as.numeric(as.character(b.meta$bacteria))
 b.meta$Depth<-factor(b.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30")) # put factor levels in the right order
 b.meta$Treatment<-factor(b.meta$Treatment, levels=c("NT", "CT", "Org3")) # put factor levels in the right order
 b.meta$FB_Ratio<-b.meta$Fun_QPCR/b.meta$bacteria # calculate the fungal:bacteria ratio
-b.meta2<-b.meta[b.meta$Description!="Org30_54"&b.meta$Description!="Org35_104"&b.meta$Description!="Org310Ap4"&b.meta$Description!="Org3Ap304",] # subset the metadata, excluding the levels that we don't want
+b.meta2<-b.meta[b.meta$Description!="Org30_54"&b.meta$Description!="Org35_104"&b.meta$Description!="Org310Ap4"&b.meta$Description!="Org3Ap304",] # subset to remove outlier for ratio analysis
 # do QPCR stats:
 
 # figure 1.1 ####
@@ -581,23 +581,26 @@ fGA.Q<-subset_taxa(GAD.Fun, !is.na(Genus)) # remove anything not ID'd to Genus
 fGA.Qnf2<-subset_taxa(GAD.Fun, is.na(Genus)) # select only things that are not filtered to Genus
 
 # now give all unknown spp a same name:
-tt1<-as.data.frame(as.matrix(tax_table(fGA.Q))
+tt1<-as.data.frame(as.matrix(tax_table(fGA.Q)))
 tt1$Species[is.na(tt1$Species)]<-paste0(tt1$Genus[is.na(tt1$Species)], "Undefined", sep="")
 tax_table(fGA.Q)<-tax_table(as.matrix(tt1))
 # now aggregate to species level
 fGA.Q<-tax_glom(fGA.Q, taxrank="Species")
 
-# annotate fungi by fungal traits database 
+# annotate fungi by fungal traits database ####
 fungalTraits<-read.csv("/Users/dietrich/Documents/GitHub/Plant-Health-Project/Analysis/Data/FungalTraits2021.csv")
 View(fungalTraits)
-fungalTraits<-as.data.frame(fungalTraits)
-fungalTraits$GENUS<-paste0("g__", fungalTraits$GENUS, sep="")
-tt<-as.data.frame(as.matrix(tax_table(fGA.Q)))
-tt2<-left_join(tt, fungalTraits, by=c("Genus"="GENUS"))
-identical(tt$Family, tt2$Family.x) # sanity check
-rownames(tt2)<-rownames(tt)
+fungalTraits<-as.data.frame(fungalTraits) # convert reference data to dataframe 
+fungalTraits$GENUS<-paste0("g__", fungalTraits$GENUS, sep="") # Add "g__" to reference database
+tt<-as.data.frame(as.matrix(tax_table(fGA.Q))) # extracting the tax table from phyloseq = fGA.Q
+tt2<-left_join(tt, fungalTraits, by=c("Genus"="GENUS")) # merge the dataframes by genus column
+identical(tt$Family, tt2$Family.x) # sanity check: make sure family matach after merging
+
+# stop here an make sure output is TRUE !!
+
+rownames(tt2)<-rownames(tt) # adding rownames 
 tt2<-tt2[,-c(8:13,16,21,25,29:31)] # remove columns not being used in the analysis
-tax_table(fGA.Q)<-tax_table(as.matrix(tt2))
+tax_table(fGA.Q)<-tax_table(as.matrix(tt2)) # merge tax table with annotations back into phyloseq object
 
 # filter samples to top 4 levels
 fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") 
@@ -613,6 +616,11 @@ summary(aov(a.ffit))  # by seq depth = 17.8% of variance explained at spp level
 a.nffit<-glm(unlist(estimate_richness(fGA.Qnf2, measures="Observed"))~sample_data(fGA.Qnf2)$SeqDepth)
 #a.bfit<-lm(unlist(estimate_richness(bGA.Ql, measures="Observed"))~sample_sums(bGA.Ql))
 summary(aov(a.nffit))
+
+a.n1ffit<-glm(unlist(estimate_richness(GAD.Fun, measures="Observed"))~sample_data(GAD.Fun)$SeqDepth)
+#a.bfit<-lm(unlist(estimate_richness(bGA.Ql, measures="Observed"))~sample_sums(bGA.Ql))
+summary(aov(a.n1ffit))  # by seq depth = 17.8% of variance explained at spp level
+
 
 # make data frame of covariants
 # check for significant associations among them
@@ -748,7 +756,7 @@ abline(h = 0, col = 'black', lty=c(2))
 
 # figure 3.2 ####
 # alpha diversity of all taxa, unfiltered
-identical(rownames(nf.meta), rownames(estimate_richness(GAD.Fun.nf, measures="Observed")))
+identical(rownames(nf.meta), rownames(estimate_richness(GAD.Fun, measures="Observed")))
 nresids1<-a.n1ffit$residuals
 n1alphadiveffect<-summary(aov(glm(nresids1~nf.meta$Depth*nf.meta$Treatment)))
 plot(fitted(a.nffit), resid(a.n1ffit))
