@@ -54,7 +54,7 @@ GAD.Qscale<-function(ps, val, scale){
 taxmodel<-function(d){ 
   # input is phyloseq object
   # already normalized
-  d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
+  d1<-as.data.frame(as.matrix(otu_table(d))) # dim =
   d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
   d3<-as.data.frame(as.matrix(tax_table(d)))
   if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
@@ -62,7 +62,7 @@ taxmodel<-function(d){
   treatment<-as.factor(d2$Treatment)
   effort<-as.numeric(as.character(d2$SeqDepth))
   depth<-as.factor(d2$Depth)
-  depth<-factor(depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
+  depth<-factor(depth, levels=c("0_5", "5_10", "10Ap"))#, "Ap30"))
   treatment<-factor(treatment, levels=c("NT", "CT", "Org3"))
   pH<-as.numeric(as.character(d2$pH))
   Cpercent<-as.numeric(as.character(d2$C_percent))
@@ -79,7 +79,7 @@ taxmodel<-function(d){
   out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort+depth+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
   out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort+depth+treatment*depth+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
   out$fit<-list(1:length(ncol(d1)))
-  out$plots<-list(1:length(ncol(d1)))
+  #out$plots<-list(1:length(ncol(d1)))
   colnames(out$predicted)<-colnames(d1)
   for(i in c(1:ncol(d1))){
     fit<-NULL
@@ -89,7 +89,7 @@ taxmodel<-function(d){
     out$predicted[,i]<-predict(fit)
     out$fit[[i]]<-fit
     out$tab[[i]]<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
-    out$plots[[i]]<-boxplot(d1[,i]~depth + treatment, las=2, xlab=NULL,cex.names=0.1, ylab="Abundance",main=species[i], names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+    #out$plots[[i]]<-boxplot(d1[,i]~depth + treatment, las=2, xlab=NULL,cex.names=0.1, ylab="Abundance",main=species[i], names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
   }
   out$predcor<-cor(out$predicted, use="pairwise.complete.obs")
   out$spcor<-cor(d1, use="pairwise.complete.obs")
@@ -103,12 +103,13 @@ taxmodel<-function(d){
   colnames(out$predcor)<-colnames(d1)
   names(out$tab)<-colnames(d1)
   names(out$fit)<-colnames(d1)
-  names(out$plots)<-as.character(d3$Species)
+  #names(out$plots)<-as.character(d3$Species)
   
   out$effectDF<-matrix(nrow=ncol(d1), ncol=4)
   rownames(out$effectDF)<-d3$Species
   colnames(out$effectDF)<-c("CT", "ORG", "Lifestyle", "SciName")
   for(i in 1:nrow(out$effectDF)){
+    #out$effectDF[i,1]<-out$fit[[i]]$coefficients["(Intercept)"]
     out$effectDF[i,1]<-out$fit[[i]]$coefficients["treatmentCT"]
     out$effectDF[i,2]<-out$fit[[i]]$coefficients["treatmentOrg3"]
     
@@ -589,37 +590,155 @@ bmeta<-as.data.frame(as.matrix(sample_data(GAD.bac)))
 identical(rownames(bmeta), names(ratio)) # make sure the datasets are organized the same way
 bmeta$bacteria<-as.numeric(as.character(bmeta$Bac_QPCR))*ratio # take ratio of bacteria from 16s
 sample_data(GAD.bac)<-sample_data(bmeta) # return updated metadata to bacterial dataset
-GAD.bac<-subset_samples(GAD.bac, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") # subset the datset to depths with enough replication
+GAD.bac<-subset_samples(GAD.bac, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap")#|Depth=="Ap30") # subset the datset to depths with enough replication
 b.meta<-as.data.frame(as.matrix(sample_data(GAD.bac))) # format data to insert
 b.meta$Fun_QPCR<-as.numeric(as.character(b.meta$Fun_QPCR)) # 
 b.meta$Bac_QPCR<-as.numeric(as.character(b.meta$Bac_QPCR))
 b.meta$bacteria<-as.numeric(as.character(b.meta$bacteria))
-b.meta$Depth<-factor(b.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30")) # put factor levels in the right order
+b.meta$Depth<-factor(b.meta$Depth, levels=c("0_5", "5_10", "10Ap"))#, "Ap30")) # put factor levels in the right order
 b.meta$Treatment<-factor(b.meta$Treatment, levels=c("NT", "CT", "Org3")) # put factor levels in the right order
 b.meta$FB_Ratio<-b.meta$Fun_QPCR/b.meta$bacteria # calculate the fungal:bacteria ratio
 b.meta2<-b.meta[b.meta$Description!="Org30_54"&b.meta$Description!="Org35_104"&b.meta$Description!="Org310Ap4"&b.meta$Description!="Org3Ap304",] # subset to remove outlier for ratio analysis
+b.meta3<-b.meta[b.meta$Description=="Org30_54"|b.meta$Description=="Org35_104"|b.meta$Description=="Org310Ap4"|b.meta$Description=="Org3Ap304",]
+
+
 # do QPCR stats:
 
 # figure 1.1 ####
-boxplot(b.meta$Fun_QPCR~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Total Fungi QPCR", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+boxplot(b.meta$Fun_QPCR~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Total Fungi QPCR", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8))
 stripchart(b.meta$Fun_QPCR~b.meta$Depth+b.meta$Treatment, vertical = TRUE,
            method = "jitter", add = TRUE, pch = 20, col = 'black')
 summary(aov(b.meta$Fun_QPCR~b.meta$Depth*b.meta$Treatment))
+TukeyHSD(aov(b.meta$Fun_QPCR~b.meta$Depth*b.meta$Treatment))
+aov(b.meta$Fun_QPCR~b.meta$Depth*b.meta$Treatment)$coefficients
 # figure 1.2 ####
-boxplot(b.meta$bacteria~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Total Bacteria QPCR", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+boxplot(b.meta$bacteria~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Total Bacteria QPCR", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8))
 stripchart(b.meta$bacteria~b.meta$Depth+b.meta$Treatment, vertical = TRUE,
            method = "jitter", add = TRUE, pch = 20, col = 'black')
 summary(aov(b.meta$bacteria~b.meta$Depth*b.meta$Treatment))
+TukeyHSD(aov(b.meta$bacteria~b.meta$Depth*b.meta$Treatment))
 # figure 1.3 ####
-boxplot(b.meta$FB_Ratio~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Fungal Bacterial Ratio", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+boxplot(b.meta$FB_Ratio~b.meta$Depth+b.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Fungal Bacterial Ratio", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8))
 stripchart(b.meta$FB_Ratio~b.meta$Depth+b.meta$Treatment, vertical = TRUE,
            method = "jitter", add = TRUE, pch = 20, col = 'black')
 summary(aov(b.meta$FB_Ratio~b.meta$Depth*b.meta$Treatment))
 
-boxplot(b.meta2$FB_Ratio~b.meta2$Depth+b.meta2$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Fungal Bacterial Ratio", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
+boxplot(b.meta2$Bac_QPCR~b.meta2$Depth+b.meta2$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Bacterial Gene Count", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8))
+stripchart(b.meta2$Bac_QPCR~b.meta2$Depth+b.meta2$Treatment, vertical = TRUE,
+           method = "jitter", add = TRUE, pch = 20, col = 'black')
+summary(aov(b.meta2$Bac_QPCR~b.meta2$Depth*b.meta2$Treatment))
+
+boxplot(b.meta2$FB_Ratio~b.meta2$Depth+b.meta2$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Fungal Bacterial Ratio", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8))
 stripchart(b.meta2$FB_Ratio~b.meta2$Depth+b.meta2$Treatment, vertical = TRUE,
            method = "jitter", add = TRUE, pch = 20, col = 'black')
 summary(aov(b.meta2$FB_Ratio~b.meta2$Depth*b.meta2$Treatment))
+
+# make a nice scatter plot in ggplot~
+cor(b.meta2$Bac_QPCR,b.meta2$Fun_QPCR) # 0.779
+cor(b.meta$Bac_QPCR,b.meta$Fun_QPCR) # 0.600
+plot(b.meta2$Bac_QPCR,b.meta2$Fun_QPCR, col=b.meta2$Treatment, pch=as.numeric(as.factor(b.meta2$Depth)))
+
+# exit seminar 1 ####
+#plot(b.meta$Bac_QPCR,b.meta$Fun_QPCR, col=b.meta$Treatment, pch=as.numeric(as.factor(b.meta$Depth))+15, main="Fungal vs. Bacterial Abundance", xlab="Bacterial Gene Count", ylab="Fungal Gene Count")
+
+ggplot(b.meta, aes(x=Bac_QPCR, y=Fun_QPCR, color=Treatment, shape=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("Fungal vs Bacterial Gene Abundance")+ 
+  labs(y="Fungal Gene Abundance", x="Bacterial Gene Abundance")+
+  scale_color_grey() + 
+  theme_bw()
+
+summary(aov(b.meta2$FB_Ratio~b.meta2$Depth*b.meta2$Treatment))
+
+sd<-with(b.meta2, summary(aov(glm(FB_Ratio~Depth+Treatment+as.numeric(as.character(pH))+as.numeric(as.character(C_percent))+as.numeric(as.character(N_percent))+as.numeric(as.character(C_N_ratio))+as.numeric(as.character(No3_ugPerg))+as.numeric(as.character(Nh4_ugPerg))+as.numeric(as.character(Clay_percent))+as.numeric(as.character(Silt_percent))+as.numeric(as.character(Sand_percent))+as.numeric(as.character(B.Density_gcm3))))))
+
+v<-100*sd[[1]]$`Sum Sq`/sum(sd[[1]]$`Sum Sq`)
+names(v)<-c("Depth", "Farming System", "pH", "C Percent", "N Percent", "CN Ratio", "Nitrate", "Ammonium", "Clay Percent", "Silt Percent", "Sand Percent", "Bulk Density", "Residuals")
+barplot(v, main="Predictors of F:B", ylab="Percent Variation Explained", las=2)
+
+ggplot(b.meta2[b.meta2$Depth=="0_5",],aes(x=Bac_QPCR, y=Fun_QPCR, color=Treatment, size=2)) + 
+        geom_point() + 
+        ggtitle("0 cm - 5 cm")+ 
+        labs(y="Fungal Gene Abundance", x="Bacterial Gene Abundance")+
+        scale_color_grey() + 
+        theme_bw()
+ggplot(b.meta2[b.meta2$Depth=="5_10",],aes(x=Bac_QPCR, y=Fun_QPCR, color=Treatment, size=2)) + 
+  geom_point() + 
+  ggtitle("5 cm - 10 cm")+ 
+  labs(y="Fungal Gene Abundance", x="Bacterial Gene Abundance")+
+  scale_color_grey() + 
+  theme_bw()
+ggplot(b.meta2[b.meta2$Depth=="10Ap",],aes(x=Bac_QPCR, y=Fun_QPCR, color=Treatment, size=2)) + 
+  geom_point() + 
+  ggtitle("10 cm - Ap")+ 
+  labs(y="Fungal Gene Abundance", x="Bacterial Gene Abundance")+
+  scale_color_grey() + 
+  theme_bw()
+
+ggplot(b.meta2[b.meta2$Treatment=="CT",],aes(x=Bac_QPCR, y=Fun_QPCR, color=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("Chisel-till")+ 
+  labs(y="Fungal Gene Abundance", x="Bacterial Gene Abundance")+
+  scale_color_grey() + 
+  theme_bw()
+ggplot(b.meta2[b.meta2$Treatment=="NT",],aes(x=Bac_QPCR, y=Fun_QPCR, color=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("No-Till")+ 
+  labs(y="Fungal Gene Abundance", x="Bacterial Gene Abundance")+
+  scale_color_grey() + 
+  theme_bw()
+ggplot(b.meta2[b.meta2$Treatment=="Org3",],aes(x=Bac_QPCR, y=Fun_QPCR, color=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("Organic")+ 
+  labs(y="Fungal Gene Abundance", x="Bacterial Gene Abundance")+
+  scale_color_grey() + 
+  theme_bw()
+with( b.meta2[b.meta2$Depth=="0_5",], plot(Bac_QPCR,Fun_QPCR, col=Treatment))
+with( b.meta2[b.meta2$Depth=="5_10",], plot(Bac_QPCR,Fun_QPCR, col=Treatment))
+with( b.meta2[b.meta2$Depth=="10Ap",], plot(Bac_QPCR,Fun_QPCR, col=Treatment))
+
+with( b.meta2[b.meta2$Treatment=="NT",], cor(Bac_QPCR,Fun_QPCR))
+with( b.meta2[b.meta2$Treatment=="CT",], cor(Bac_QPCR,Fun_QPCR))
+with( b.meta2[b.meta2$Treatment=="Org3",], cor(Bac_QPCR,Fun_QPCR))
+
+ggplot(b.meta2,aes(x=C_percent, y=Fun_QPCR, color=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("Carbon")+ 
+  labs(y="Fungal Gene Abundance", x="Carbon Percent")+
+  scale_color_grey() + 
+  theme_bw()
+with(b.meta2, cor(as.numeric(as.character(N_percent)),Fun_QPCR))
+with(b.meta2, cor(as.numeric(as.character(N_percent)),as.numeric(as.character(C_percent))))
+with(b.meta2, summary(aov(glm(Fun_QPCR~Treatment +as.numeric(as.character(C_percent))*as.numeric(as.character(pH))))))
+ggplot(b.meta2,aes(x=C_percent, y=N_percent, color=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("C:N")+ 
+  labs(y="N Percent", x="Carbon Percent")+
+  scale_color_grey() + 
+  theme_bw()
+
+# levene homogeneity of variance ####
+library(lawstat)
+with( b.meta2, levene.test(Bac_QPCR, Depth))
+with( b.meta2, levene.test(Fun_QPCR, Depth))
+with( b.meta2, levene.test(Bac_QPCR, Treatment))
+with( b.meta2, levene.test(Fun_QPCR, Treatment))
+
+with( b.meta2[b.meta2$Treatment=="NT",], levene.test(Bac_QPCR, Depth))
+with( b.meta2[b.meta2$Treatment=="CT",], levene.test(Bac_QPCR, Depth))
+with( b.meta2[b.meta2$Treatment=="Org3",], levene.test(Bac_QPCR, Depth))
+
+with( b.meta2[b.meta2$Treatment=="NT",], levene.test(Fun_QPCR, Depth))
+with( b.meta2[b.meta2$Treatment=="CT",], levene.test(Fun_QPCR, Depth))
+with( b.meta2[b.meta2$Treatment=="Org3",], levene.test(Fun_QPCR, Depth))
+
+with( b.meta2[b.meta2$Depth=="0_5",], cor(Bac_QPCR,Fun_QPCR))
+with( b.meta2[b.meta2$Depth=="5_10",], cor(Bac_QPCR,Fun_QPCR))
+with( b.meta2[b.meta2$Depth=="10Ap",], cor(Bac_QPCR,Fun_QPCR))
+
+with( b.meta2[b.meta2$Depth=="0_5",], summary(aov(glm(Fun_QPCR~Bac_QPCR+Treatment)))) # 5.8 by bacteria, 29% by treatment
+with( b.meta2[b.meta2$Depth=="5_10",], summary(aov(glm(Fun_QPCR~Bac_QPCR+Treatment)))) # 33 by bacteria, 35% by treatment
+with( b.meta2[b.meta2$Depth=="10Ap",], summary(aov(glm(Fun_QPCR~Bac_QPCR+Treatment)))) # 41.1% of var explained by bacteria; 9.54 explained by farming system
 
 # model fungal vs bacterial depth dependence
 bdepthfit<-glm(bacteria~Depth*Treatment,data = b.meta)
@@ -640,6 +759,10 @@ par(mar=c(10, 4, 4, 2) + 0.1)
 barplot(t(fdRat), beside=T, las=2, names.arg = c("Chisel-Till", "Organic"))
 legend("topleft", legend=colnames(fdRat), fill=grey.colors(3))
 abline(0,0)
+
+# make boxplot of fungi vs bacterial abundance
+boxplot()
+
 
 #sample_data(GAD.bac)$SeqDepth<-sample_sums(GAD.bac)
 sample_data(GAD.Fun)$SeqDepth<-sample_sums(GAD.Fun)
@@ -688,7 +811,7 @@ tt2<-tt2[,-c(8:13,16,21,25,29:31)] # remove columns not being used in the analys
 tax_table(fGA.Q)<-tax_table(as.matrix(tt2)) # merge tax table with annotations back into phyloseq object
 
 # filter samples to top 4 levels
-fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30") 
+fGA.Ql<-subset_samples(fGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap")#|Depth=="Ap30") 
 #bGA.Ql<-subset_samples(bGA.Q, Depth=="0_5"|Depth=="5_10"|Depth=="10Ap"|Depth=="Ap30")
 
 # alpha diversity
@@ -716,7 +839,7 @@ f.meta<-as.data.frame(as.matrix(sample_data(fGA.Ql)))
 f.meta$Fun_QPCR<-as.numeric(as.character(f.meta$Fun_QPCR))
 f.meta$Bac_QPCR<-as.numeric(as.character(f.meta$Bac_QPCR))
 f.meta$FB_Ratio<-f.meta$Fun_QPCR/f.meta$Bac_QPCR
-f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
+f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap"))#, "Ap30"))
 f.meta$Treatment<-factor(f.meta$Treatment, levels=c("NT", "CT", "Org3"))
 f.meta$pH<-as.numeric(as.character(f.meta$pH))
 f.meta$C_percent<-as.numeric(as.character(f.meta$C_percent))
@@ -736,7 +859,7 @@ nf.meta<-as.data.frame(as.matrix(sample_data(fGA.Qnf2)))
 nf.meta$Fun_QPCR<-as.numeric(as.character(nf.meta$Fun_QPCR))
 nf.meta$Bac_QPCR<-as.numeric(as.character(nf.meta$Bac_QPCR))
 nf.meta$FB_Ratio<-nf.meta$Fun_QPCR/nf.meta$Bac_QPCR
-nf.meta$Depth<-factor(nf.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
+nf.meta$Depth<-factor(nf.meta$Depth, levels=c("0_5", "5_10", "10Ap"))#, "Ap30"))
 nf.meta$Treatment<-factor(nf.meta$Treatment, levels=c("NT", "CT", "Org3"))
 nf.meta$pH<-as.numeric(as.character(nf.meta$pH))
 nf.meta$C_percent<-as.numeric(as.character(nf.meta$C_percent))
@@ -753,7 +876,7 @@ nf.meta$SampleDepth<-as.numeric(as.character(nf.meta$SampleDepth))
 
 # env PCA ####
 library(factoextra)
-dat<-f.meta[,c(6:11,13:18)]
+dat<-f.meta[,c(8:11,13:18)]
 group<-f.meta$Treatment
 group2<-f.meta$Depth
 
@@ -773,6 +896,9 @@ fviz_pca_ind(res.pca,
              addEllipses = TRUE, # Concentration ellipses
              ellipse.type = "confidence",
              legend.title = "Farming System",
+             label="none",
+             pointsize = 3,
+             ellipse.level=0.99999,
              repel = TRUE
 )
 
@@ -782,9 +908,15 @@ fviz_pca_ind(res.pca,
              addEllipses = TRUE, # Concentration ellipses
              ellipse.type = "confidence",
              legend.title = "Depth",
+             label="none",
+             pointsize = 3,
+             ellipse.level=0.99999,
              repel = TRUE
 )
 
+fviz_pca_biplot(res.pca, label="var",palette = c("#00AFBB", "#E7B800", "#FC4E07", "#696969"), habillage=f.meta$Treatment,addEllipses=TRUE,pointsize = 3,ellipse.level=0.99,ellipse.type = "confidence")
+
+fviz_pca_biplot(res.pca, label="var",palette = c("#00AFBB", "#E7B800", "#FC4E07", "#696969"), habillage=f.meta$Depth,addEllipses=TRUE,pointsize = 3,ellipse.level=0.99,ellipse.type = "confidence")
 # analysis of correltion of seqdepth with other factors:
 
 with(f.meta, summary(aov(glm(SampleDepth~Depth))))
@@ -1483,6 +1615,50 @@ msoot.mold<-subset_taxa(fGA.Qlf, primary_lifestyle=="sooty_mold")
 #munknown<-subset_taxa(fGA.Qlf, primary_lifestyle=="unspecified")
 #mlichenized<-subset_taxa(fGA.Qlf, primary_lifestyle=="lichenized")
 
+# Boxplot abundances ... 
+
+ECM.a<-unlist(sample_sums(mECM))
+AMF.a<-unlist(sample_sums(mAMF))
+p.path.a<-unlist(sample_sums(mp.path))
+soilsap.a<-unlist(sample_sums(msoil.sap))
+man.par.a<-unlist(sample_sums(man.par))
+total.sap.a<-unlist(sample_sums(total.sap))
+
+
+
+ab.df<-data.frame(ECM.a, 
+                  AMF.a, 
+                  p.path.a,
+                  soilsap.a,
+                  man.par.a,
+                  total.sap.a,
+                  "depth"=as.data.frame(as.matrix(sample_data(fGA.Qlf)))$Depth,
+                  "treatment"= as.data.frame(as.matrix(sample_data(fGA.Qlf)))$Treatment)
+ab.df$depth<-factor(ab.df$depth,levels=c("0_5", "5_10", "10Ap"))
+ab.df$treatment<-factor(ab.df$treatment,levels=c("NT", "CT", "Org3"))
+with(ab.df,boxplot(ECM.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="ECM Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
+with(ab.df,summary(aov(glm(ECM.a~depth*treatment))))
+
+with(ab.df,boxplot(AMF.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="AMF Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
+with(ab.df,summary(aov(glm(AMF.a~depth*treatment))))
+with(ab.df,TukeyHSD(aov(glm(AMF.a~depth*treatment))))
+with(ab.df,aov(glm(AMF.a~depth*treatment))$coefficients)
+
+with(ab.df,boxplot(p.path.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Plant Pathogen Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
+with(ab.df,summary(aov(glm(p.path.a~depth*treatment))))
+
+with(ab.df,boxplot(man.par.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Animal Parasite Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
+with(ab.df,summary(aov(glm(man.par.a~depth*treatment))))
+
+with(ab.df,boxplot(total.sap.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Total Saprotroph Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
+with(ab.df,summary(aov(glm(total.sap.a~depth*treatment))))
+with(ab.df,TukeyHSD(aov(glm(total.sap.a~depth*treatment))))
+with(ab.df,aov(glm(total.sap.a~depth*treatment))$coefficients)
+
+with(ab.df,boxplot(soilsap.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Soil Saprotroph Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
+with(ab.df,summary(aov(glm(soilsap.a~depth*treatment))))
+with(ab.df,TukeyHSD(aov(glm(soilsap.a~depth*treatment))))
+with(ab.df,aov(glm(soilsap.a~depth*treatment))$coefficients)
 # sample sums by category
 # this function makes a plot of abundance by farming system and depth
 # it also runs an anova to test difference in abundance by factor categories
@@ -1491,7 +1667,7 @@ msoot.mold<-subset_taxa(fGA.Qlf, primary_lifestyle=="sooty_mold")
 maineffects<-function(ps){
   f.meta<-as.data.frame(as.matrix(sample_data(ps)))
   f.meta$SeqDepth<-as.numeric(as.character(f.meta$SeqDepth))
-  f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap", "Ap30"))
+  f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap"))#, "Ap30"))
   f.meta$Treatment<-factor(f.meta$Treatment, levels=c("NT", "CT", "Org3"))
   f.meta$pH<-as.numeric(as.character(f.meta$pH))
   f.meta$C_percent<-as.numeric(as.character(f.meta$C_percent))
@@ -1529,6 +1705,8 @@ glifestyle.stats<-calc.maineffectsgroup(lifestyle.list)
 tlifestyle.stats<-calc.maineffects(lifestyle.list)
 # determine significance of treatment...####
 maineffects(mp.lifestyle)
+#plot_bar(mp.lifestyle, x="Treatment", fill="primary_lifestyle")
+
 maineffects(total.sap)
 maineffects(mp.path)
 maineffects(msoil.sap)
@@ -1574,7 +1752,7 @@ emepi<-taxmodel(mepi)
 emsoot.mold<-taxmodel(msoot.mold)
 Sys.time()-t1
 
-# plot 1 ####
+# plot 1 PCA ####
 # pca of fungal abundance
 
 
@@ -1608,7 +1786,9 @@ fviz_pca_ind(pl.pca,
              legend.title = "Depth",
              repel = TRUE
 )
+fviz_pca_biplot(pl.pca, label="var",palette = c("#00AFBB", "#E7B800", "#FC4E07", "#696969"), habillage=f.meta$Treatment,addEllipses=TRUE,pointsize = 3,ellipse.level=0.99,ellipse.type = "confidence", repel = TRUE)
 
+fviz_pca_biplot(pl.pca, label="var",palette = c("#00AFBB", "#E7B800", "#FC4E07", "#696969"), habillage=f.meta$Depth,addEllipses=TRUE,pointsize = 3,ellipse.level=0.99,ellipse.type = "confidence", repel = TRUE)
 # plot the relative effect size for each of the significant taxa
 # significant taxa by farming system
 # ratio of coefficients:
@@ -1668,7 +1848,7 @@ plotdiff(emp.path)
 plotdiff(emAMF)
 # plot 2.5 ####
 plotdiff(eman.par)
-
+plotdiff(emdung.sap)
 # plot 4 total spp biplots vs unknowns####
 # color species by known group association
 plotdiff3<-function(x){
