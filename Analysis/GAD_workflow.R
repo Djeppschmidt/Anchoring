@@ -42,7 +42,7 @@ GAD.Qscale<-function(ps, val, scale){
   
 }
 
-# Models the relationship between taxon and environment with treatment factors
+# Models the relationship between taxon and treatment factors
 # d = ps object
 # name = name of column from tax table to use for labeling output
 # outputs:  $fit = glm object
@@ -59,6 +59,7 @@ taxmodel<-function(d){
   d3<-as.data.frame(as.matrix(tax_table(d)))
   if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
   if(!identical(colnames(d1), rownames(d3))){stop("tax table not in correct order")}
+  colnames(d1)<-paste(sub("g__", "", d3$Genus),sub("s__", "", d3$Species), sep="_")
   treatment<-as.factor(d2$Treatment)
   effort<-as.numeric(as.character(d2$SeqDepth))
   depth<-as.factor(d2$Depth)
@@ -121,20 +122,30 @@ taxmodel<-function(d){
   
   out
 }
-# Models the relationship between taxon and environment without treatment factors
+# Models the relationship between taxon and environment
+# d = ps object
+# name = name of column from tax table to use for labeling output
 # outputs:  $fit = glm object
 #           $tab = significance table
 #           $residuals = residuals from the model
 #           $predicted = model predicted values
 #           $predcor = correlation matrix of the predicted values for each spp
 #           $spcor = species correlation matrix
-taxEnvmodel<-function(d){ 
+taxenvmodel<-function(d){ 
   # input is phyloseq object
   # already normalized
   d1<-as.data.frame(t(as.matrix(otu_table(d)))) # dim =
   d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  d3<-as.data.frame(as.matrix(tax_table(d)))
   if(!identical(rownames(d1), rownames(d2))){stop("dataframe orientation does not match")}
+  if(!identical(colnames(d1), rownames(d3))){stop("tax table not in correct order")}
+  colnames(d1)<-paste(sub("g__", "", d3$Genus),sub("s__", "", d3$Species), sep="_")
+  
+  #treatment<-as.factor(d2$Treatment)
   effort<-as.numeric(as.character(d2$SeqDepth))
+  #depth<-as.factor(d2$Depth)
+  #depth<-factor(depth, levels=c("0_5", "5_10", "10Ap"))#, "Ap30"))
+  #treatment<-factor(treatment, levels=c("NT", "CT", "Org3"))
   pH<-as.numeric(as.character(d2$pH))
   Cpercent<-as.numeric(as.character(d2$C_percent))
   Ammonia<-as.numeric(as.character(d2$Nh4_ugPerg))
@@ -145,20 +156,24 @@ taxEnvmodel<-function(d){
   N_percent<-as.numeric(as.character(d2$N_percent))
   Sand<-as.numeric(as.character(d2$Sand_percent))
   B.Density<-as.numeric(as.character(d2$B.Density_gcm3))
+  species<-as.character(d3$Species)
   out<-NULL
-  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
-  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ effort+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
+  out$residuals<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
+  out$predicted<-matrix(ncol=ncol(d1), nrow=length(predict(glm(d1[,1] ~ pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian"))))
   out$fit<-list(1:length(ncol(d1)))
+  #out$plots<-list(1:length(ncol(d1)))
   colnames(out$predicted)<-colnames(d1)
   for(i in c(1:ncol(d1))){
     fit<-NULL
-    fit <- glm(d1[,i] ~ effort+pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian")
+    fit <- glm(d1[,i] ~ pH+Cpercent*N_percent+Ammonia+Nitrate+Clay+Silt+Sand+B.Density,family="gaussian")
     
     out$residuals[,i]<-residuals(fit)
     out$predicted[,i]<-predict(fit)
     out$fit[[i]]<-fit
     out$tab[[i]]<-cbind(summary(aov(fit))[[1]],"varExplained"=summary(aov(fit))[[1]]$`Sum Sq`/sum(summary(aov(fit))[[1]]$`Sum Sq`)*100)
+    #out$plots[[i]]<-boxplot(d1[,i]~depth + treatment, las=2, xlab=NULL,cex.names=0.1, ylab="Abundance",main=species[i], names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","NT Ap-30cm","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","CT Ap-30cm","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap","Org Ap-30cm"), par(cex.axis=0.8))
   }
+  #names(out$tab)<-paste(sub("g__", "", d3$Genus),sub("s__", "", d3$Species), sep="_")
   out$predcor<-cor(out$predicted, use="pairwise.complete.obs")
   out$spcor<-cor(d1, use="pairwise.complete.obs")
   #out$hc<-hclust(out$cor, method="ward.D")
@@ -171,6 +186,22 @@ taxEnvmodel<-function(d){
   colnames(out$predcor)<-colnames(d1)
   names(out$tab)<-colnames(d1)
   names(out$fit)<-colnames(d1)
+  #names(out$plots)<-as.character(d3$Species)
+  
+  out$effectDF<-matrix(nrow=ncol(d1), ncol=4)
+  rownames(out$effectDF)<-paste(sub("g__", "", d3$Genus),sub("s__", "", d3$Species), sep="_")
+  colnames(out$effectDF)<-c("CT", "ORG", "Lifestyle", "SciName")
+  for(i in 1:nrow(out$effectDF)){
+    #out$effectDF[i,1]<-out$fit[[i]]$coefficients["(Intercept)"]
+    out$effectDF[i,1]<-out$fit[[i]]$coefficients["treatmentCT"]
+    out$effectDF[i,2]<-out$fit[[i]]$coefficients["treatmentOrg3"]
+    
+    # out$effectDF[i,1]<-out$fit[[i]]$coefficients["treatmentCT"]/out$fit[[i]]$coefficients["(Intercept)"]
+    #  out$effectDF[i,2]<-out$fit[[i]]$coefficients["treatmentOrg3"]/out$fit[[i]]$coefficients["(Intercept)"]
+  }
+  out$effectDF[,3]<-d3$primary_lifestyle
+  out$effectDF[,4]<-paste(d3$Genus, d3$Species)
+  
   out
 }
 
@@ -1149,6 +1180,21 @@ with(ab.df,summary(aov(glm(AMF.a~depth*treatment))))
 with(ab.df,TukeyHSD(aov(glm(AMF.a~depth*treatment))))
 with(ab.df,aov(glm(AMF.a~depth*treatment))$coefficients)
 
+amfGradient<-taxenvmodel(mAMF1)
+emAMF$fit$Glomus_aggregatum$coefficients
+emAMF$fit$Septoglomus_viscosum$coefficients
+emAMF$fit$Rhizophagus_irregularis$coefficients
+emAMF$fit$Claroideoglomus_g__ClaroideoglomusUndefined$coefficients
+
+amfGradient$tab$Glomus_aggregatum
+amfGradient$fit$Glomus_aggregatum$coefficients
+
+amfGradient$tab$Septoglomus_viscosum
+amfGradient$fit$Septoglomus_viscosum$coefficients
+amfGradient$tab$Rhizophagus_irregularis
+amfGradient$fit$Rhizophagus_irregularis$coefficients
+amfGradient$tab$Claroideoglomus_g__ClaroideoglomusUndefined
+amfGradient$fit$Claroideoglomus_g__ClaroideoglomusUndefined$coefficients
 # ECM
 plotdiff(emECM)
 with(ab.df,boxplot(ECM.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="ECM Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
@@ -1159,12 +1205,38 @@ plotdiff(eman.par)
 with(ab.df[-c(30),],boxplot(man.par.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Animal Parasite Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
 with(ab.df[-c(30),],summary(aov(glm(man.par.a~depth*treatment))))
 
+Anparenv<-taxenvmodel(man.par1)
+Anparenv$fit$Metarhizium_marquandii
+Anparenv$tab$Metarhizium_marquandii
+eman.par$fit$Metarhizium_marquandii$coefficients
+
 # Plant Pathogens
 plotdiff(emp.path)
 with(ab.df,boxplot(p.path.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Plant Pathogen Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
 with(ab.df,summary(aov(glm(p.path.a~depth*treatment))))
 with(ab.df,aov(glm(p.path.a~depth*treatment))$coefficients)
 with(ab.df,aov(glm(p.path.a~depth*treatment))$coefficients["treatmentOrg3"]/aov(glm(p.path.a~depth*treatment))$coefficients["(Intercept)"]) # calculate the percent increase in plant pathogens due to organic treatment relative to no-till
+
+pathGradient<-taxenvmodel(mp.path1)
+pathGradient$tab$Fusarium_acutatum
+pathGradient$fit$Fusarium_acutatum
+pathGradient$tab$Alternaria_tenuissima
+pathGradient$fit$Alternaria_tenuissima
+
+emp.path$fit$Fusarium_acutatum
+emp.path$fit$Alternaria_tenuissima
+emp.path$fit$Paraphoma_pye # 2800% higher in ORG than NT
+emp.path$fit$Paraphoma_radicina # 258% higher in ORG than NT
+emp.path$fit$Alternaria_dactylidicola # 471% higher in ORG than in NT
+emp.path$fit$Paraphoma_rhaphiolepidis # 1926% higher in ORG than NT
+pathGradient$fit$Paraphoma_pye
+pathGradient$tab$Paraphoma_pye
+pathGradient$fit$Paraphoma_radicina
+pathGradient$tab$Paraphoma_radicina
+pathGradient$fit$Paraphoma_rhaphiolepidis
+pathGradient$tab$Paraphoma_rhaphiolepidis
+pathGradient$fit$Alternaria_dactylidicola
+pathGradient$tab$Alternaria_dactylidicola
 # network analysis ####
 
 fQ.NT<-subset_samples(fGA.Qlf, Treatment=="NT")
