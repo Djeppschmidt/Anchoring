@@ -1368,3 +1368,21 @@ E(n3)$color <- ifelse(E(n3)$weight > 0,'navy','maroon')
 plotIgraphNet(n, fQ.NTf, main="NT")
 plotIgraphNet(n2, fQ.CTf, main="CT")
 plotIgraphNet(n3, fQ.ORGf, main="ORG")
+
+
+# neural network scratch space
+
+install.packages("neuralnet")
+library(neuralnet)
+# prepare data: data frame of data plus end states
+otu.df<-as.data.frame(t(as.matrix(otu_table(fGA.Qlf))))
+states<-as.factor(as.data.frame(as.matrix(sample_data(fGA.Qlf)))$Treatment)
+testdf<-data.frame(otu.df, states)
+test2df<-testdf[-c(1:10),] # experimental run
+test3df<-testdf[c(1:10),-c(282)] # test dataset
+model<-paste0("states ~ " , paste(colnames(otu.df),c(rep(" + ", 280), " "), collapse=""))
+nn=neuralnet(eval(parse(text=model)), data=test2df, hidden=c(300,300,300), act.fct = "logistic",linear.output = FALSE) # 90% accuracy in guessing outcome
+#plot(nn, fontsize=3, dimension=10)
+Predict=predict(nn,test3df)
+#p<-prediction(nn)
+data.frame(Predict, testdf[c(1:10),c(282)])
