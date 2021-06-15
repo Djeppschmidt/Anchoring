@@ -649,8 +649,8 @@ plotdiff<-function(x){
   names<-rownames(bp)
   bp<-data.frame(CT, ORG)
   rownames(bp)<-names
-  par(mar=c(10,4,4,1)+.1)
-  barplot(t(bp), beside = T, las=2, density=30, angle=50, legend=T)
+  par(mar=c(14,4,4,1)+.1)
+  barplot(t(bp), beside = T, las=2, density=30, angle=50, legend=T, cex.names = 1)
   #legend("topright", legend=colnames(x$effectDF), fill=grey.colors(2))
   abline(0,0)
 }
@@ -675,7 +675,7 @@ plotdiff2<-function(x){
   coul<-mycolors[as.factor(names)]
   #par(mar=c(10, 4, 4, 2) + 0.1)
   par(mar=c(8,4,4,1)+.1)
-  barplot(t(as.matrix(bp)), beside = T, las=2, density=30, angle=50, legend=T) #border=rep(coul, each=2))
+  barplot(t(as.matrix(bp)), beside = T, las=2, density=30, angle=50, legend=T, cex.names = 1.3) #border=rep(coul, each=2))
   #legend("topright", legend=unique(bp$Lifestyle), fill=coul)
   #legend("topright", legend=colnames(bp[,c(1,2)]), fill=grey.colors(2), border=coul)
   abline(0,0)
@@ -704,7 +704,7 @@ plotdiff3<-function(x){
   coul<-mycolors[as.factor(bp$Lifestyle)]
   #par(mar=c(10, 4, 4, 2) + 0.1)
   par(mar=c(8,4,4,1)+.1)
-  barplot(t(as.matrix(bp[,c(1,2)])), beside = T, las=2, density=30, angle=50, legend=T, border=rep(coul, each=2))
+  barplot(t(as.matrix(bp[,c(1,2)])), beside = T, las=2, density=30, angle=50, legend=T, border=rep(coul, each=2), cex.names = 0.8)
   legend("topright", legend=unique(bp$Lifestyle), fill=unique(coul))
   #legend("topright", legend=colnames(bp[,c(1,2)]), fill=grey.colors(2), border=coul)
   abline(0,0)
@@ -763,6 +763,7 @@ cor(as.numeric(b.meta2$FB_Ratio[b.meta2$Treatment=="NT"]),as.numeric(b.meta2$C_N
 cor(as.numeric(b.meta2$FB_Ratio[b.meta2$Treatment=="CT"]),as.numeric(b.meta2$C_N_ratio[b.meta2$Treatment=="CT"]))
 # Org3: r=0.172 or -0.0056 if using b.meta2
 cor(as.numeric(b.meta2$FB_Ratio[b.meta2$Treatment=="Org3"]),as.numeric(b.meta2$C_N_ratio[b.meta2$Treatment=="Org3"]))
+# 0.026
 cor(as.numeric(b.meta2$FB_Ratio),as.numeric(b.meta2$C_N_ratio))
 
 # total abundance ####
@@ -802,26 +803,54 @@ stripchart(b.meta2$FB_Ratio~b.meta2$Depth+b.meta2$Treatment, vertical = TRUE,
            method = "jitter", add = TRUE, pch = 20, col = 'black')
 summary(aov(b.meta2$FB_Ratio~b.meta2$Depth*b.meta2$Treatment))
 
+# F:B, C:N scatterplots ####
+
 ggplot(b.meta2, aes(x=Bac_QPCR, y=Fun_QPCR, color=Treatment, shape=Depth, size=2)) + 
   geom_point() + 
   ggtitle("Fungal vs Bacterial Gene Abundance")+ 
   labs(y="Fungal Gene Abundance", x="Bacterial Gene Abundance")+
   scale_color_grey() + 
   theme_bw()
-
 summary(aov(b.meta2$FB_Ratio~b.meta2$Depth*b.meta2$Treatment))
+
+ggplot(b.meta2, aes(x=C_percent, y=N_percent, color=Treatment, shape=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("Carbon vs Nitrogen percent")+ 
+  labs(y="N Percent", x="C percent")+
+  scale_color_grey() + 
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90))
+
+b.meta2$C
+
+ggplot(b.meta2, aes(x=FB_Ratio, y=C_N_ratio, color=Treatment, shape=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("C:N ratio vs F:B ratio")+ 
+  labs(y="C:N ratio", x="F:B ratio")+
+  scale_color_grey() + 
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplot(b.meta2, aes(x=FB_Ratio, y=C_percent, color=Treatment, shape=Depth, size=2)) + 
+  geom_point() + 
+  ggtitle("C:N ratio vs F:B ratio")+ 
+  labs(y="C:N ratio", x="F:B ratio")+
+  scale_color_grey() + 
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90))
+with(b.meta2, cor(FB_Ratio, as.numeric(as.character(C_percent))))
 
 sd<-with(b.meta2, summary(aov(glm(FB_Ratio~Depth+Treatment+as.numeric(as.character(pH))+as.numeric(as.character(C_percent))+as.numeric(as.character(N_percent))+as.numeric(as.character(C_N_ratio))+as.numeric(as.character(No3_ugPerg))+as.numeric(as.character(Nh4_ugPerg))+as.numeric(as.character(Clay_percent))+as.numeric(as.character(Silt_percent))+as.numeric(as.character(Sand_percent))+as.numeric(as.character(B.Density_gcm3))))))
 
 v<-100*sd[[1]]$`Sum Sq`/sum(sd[[1]]$`Sum Sq`)
 names(v)<-c("Depth", "Farming System", "pH", "C Percent", "N Percent", "CN Ratio", "Nitrate", "Ammonium", "Clay Percent", "Silt Percent", "Sand Percent", "Bulk Density", "Residuals")
 par(mar=c(8,4,4,1)+.1)
-barplot(v, main="Predictors of F:B", ylab="Percent Variation Explained", las=2)
+barplot(v, main="Predictors of F:B", ylab="Percent Variation Explained", las=2) # environmental predictors of fungal to bacterial ratio
 
 # model fungal vs bacterial depth dependence
 bdepthfit<-glm(bacteria~Depth*Treatment,data = b.meta)
 fdepthfit<-glm(Fun_QPCR~Depth*Treatment,data = b.meta)
-fdepthfit2<-glm(Fun_QPCR~Depth*Treatment,data = b.meta2)
+fdepthfit2<-glm(Fun_QPCR~Depth*Treatment,data = b.meta2) # removing outliers
 rdepthfit<-glm(FB_Ratio~Depth*Treatment,data = b.meta)
 #p1<-effect_plot(bdepthfit, pred=Treatment, plot.points = T)
 #p2<-effect_plot(fdepthfit, pred=Treatment)
@@ -874,13 +903,13 @@ identical(tt$Family, tt2$Family.x) # sanity check: make sure family match after 
 rownames(tt2)<-rownames(tt) # adding rownames 
 tt2<-tt2[,-c(8:13,16,21,25,29:31)] # remove columns not being used in the analysis
 tax_table(fGA.Q)<-tax_table(as.matrix(tt2)) # merge tax table with annotations back into phyloseq object
-
+as.data.frame(as.matrix(tax_table(fGA.Q)))$primary_lifestyle[as.data.frame(as.matrix(tax_table(fGA.Q)))$primary_lifestyle=="unknown"]# determine how many unknown/unannotated organisms
 # edaphic factors ####
 f.meta<-as.data.frame(as.matrix(sample_data(fGA.Q)))
 f.meta$Fun_QPCR<-as.numeric(as.character(f.meta$Fun_QPCR))
 f.meta$Bac_QPCR<-as.numeric(as.character(f.meta$Bac_QPCR))
 f.meta$FB_Ratio<-f.meta$Fun_QPCR/f.meta$Bac_QPCR
-f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap"))#, "Ap30"))
+f.meta$Depth<-factor(f.meta$Depth, levels=c("0_5", "5_10", "10Ap"))
 f.meta$Treatment<-factor(f.meta$Treatment, levels=c("NT", "CT", "Org3"))
 f.meta$pH<-as.numeric(as.character(f.meta$pH))
 f.meta$C_percent<-as.numeric(as.character(f.meta$C_percent))
@@ -894,6 +923,12 @@ f.meta$Sand_percent<-as.numeric(as.character(f.meta$Sand_percent))
 f.meta$B.Density_gcm3<-as.numeric(as.character(f.meta$B.Density_gcm3))
 f.meta$SeqDepth<-as.numeric(as.character(f.meta$SeqDepth))
 f.meta$SampleDepth<-as.numeric(as.character(f.meta$SampleDepth))
+
+boxplot(f.meta$C_percent~f.meta$Depth+f.meta$Treatment,las=2, xlab=NULL,cex.names=0.1,main="Fungal Bacterial Ratio", ylab="Gene Count", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8))
+stripchart(b.meta2$FB_Ratio~b.meta2$Depth+b.meta2$Treatment, vertical = TRUE,
+           method = "jitter", add = TRUE, pch = 20, col = 'black')
+
+
 
 # env PCA
 #library(factoextra)
@@ -926,7 +961,7 @@ fviz_pca_ind(res.pca,
 fviz_pca_ind(res.pca,
              col.ind = group2, # color by groups
              palette = c("#00AFBB", "#E7B800", "#FC4E07", "#696969"),
-             addEllipses = TRUE, # Concentration ellipses
+             addEllipses = T, # Concentration ellipses
              ellipse.type = "confidence",
              legend.title = "Depth",
              label="none",
@@ -1142,7 +1177,7 @@ par(mar=c(8,4,4,1)+.1)
 plotdiff2(total.lifestyle)
 
 # analysis of decomposers ####
-
+library(RColorBrewer)
 # soil saprotrophs
 plotdiff(emsoil.sap)
 with(ab.df,boxplot(soilsap.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Soil Saprotroph Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
@@ -1201,7 +1236,26 @@ with(ab.df,boxplot(ECM.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="E
 with(ab.df,summary(aov(glm(ECM.a~depth*treatment))))
 
 # Animal Parasites
-plotdiff(eman.par)
+# same as plotdiff but labels in different spot
+plotdifff<-function(x){
+  n<-c(rep(0, length(x$tab)))
+  for(i in 1:length(x$tab)){
+    n[i]<-x$tab[[i]]$`Pr(>F)`[2]
+  }
+  #par(mar=c(10, 4, 4, 2) + 0.1)
+  bp<-as.data.frame(x$effectDF[n<0.05,])
+  CT<-as.numeric(as.character(bp$CT))
+  ORG<-as.numeric(as.character(bp$ORG))
+  names<-rownames(bp)
+  bp<-data.frame(CT, ORG)
+  rownames(bp)<-names
+  par(mar=c(14,4,4,1)+.1)
+  barplot(t(bp), beside = T, las=2, density=30, angle=50, cex.names = 1)
+  #legend("topright", legend=colnames(x$effectDF), fill=grey.colors(2))
+  abline(0,0)
+}
+
+plotdifff(eman.par)
 with(ab.df[-c(30),],boxplot(man.par.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Animal Parasite Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
 with(ab.df[-c(30),],summary(aov(glm(man.par.a~depth*treatment))))
 
@@ -1209,7 +1263,7 @@ Anparenv<-taxenvmodel(man.par1)
 Anparenv$fit$Metarhizium_marquandii
 Anparenv$tab$Metarhizium_marquandii
 eman.par$fit$Metarhizium_marquandii$coefficients
-
+summary(aov(eman.par$fit$Metarhizium_marquandii))
 # Plant Pathogens
 plotdiff(emp.path)
 with(ab.df,boxplot(p.path.a~depth+treatment,las=2, xlab=NULL,cex.names=0.1, main="Plant Pathogen Abundance", ylab="Abundance", names=c("NT 0-5cm","NT 5-10cm","NT 10cm-Ap","CT 0-5cm","CT 5-10cm","CT 10cm-Ap","Org 0-5cm", "Org 5-10cm","Org 10cm-Ap"), par(cex.axis=0.8)))
@@ -1335,7 +1389,7 @@ plotIgraphNet<-function(net, ps, main){
 
 
 c<-f.NTnet#*(f.NTnet>0.2 + (-0.2 > f.NTnet))
-c[c>(-.4)&c<0.4]<-0
+c[c>(-.3)&c<0.3]<-0
 #sum(c)
 n<-graph_from_incidence_matrix(c, directed=T, mode="out", weighted=T)
 #cfg<-(n)
@@ -1357,7 +1411,7 @@ hist(degree(n2))
 #modularity(n2, unlist(tc))
 
 c3<-f.Org3net
-c3[c3>(-.3)&c3<0.3&c3!=1]<-0
+c3[c3>(-.3)&c3<0.3]<-0
 #sum(c3)0.1
 n3<-graph_from_incidence_matrix(c3, directed=T, mode="out", weighted=T)
 n3<-delete.vertices(simplify(n3), degree(n3)==0)
@@ -1368,6 +1422,320 @@ E(n3)$color <- ifelse(E(n3)$weight > 0,'navy','maroon')
 plotIgraphNet(n, fQ.NTf, main="NT")
 plotIgraphNet(n2, fQ.CTf, main="CT")
 plotIgraphNet(n3, fQ.ORGf, main="ORG")
+
+# correlation networks ####
+sppcor<-function(d){
+  # prepare data
+  d1<-as.data.frame(as.matrix(otu_table(d)))# must have taxa as columns
+  d2<-as.data.frame(as.matrix(sample_data(d)))# dataframes must be samples as rows
+  if(!identical(rownames(d1), rownames(d2))){
+    d1<-as.data.frame(t(as.matrix(otu_table(d))))
+    #stop("dataframe orientation does not match")
+  }
+  
+  out<-cor(d1, method="pearson")
+  #rownames(out)<-colnames(out)
+  tm<-as.data.frame(as.matrix(tax_table(d)))
+  tmOrder<-rownames(tm) #tm$Class, tm$Order, 
+  if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+  tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+  out<-out[as.character(tmOrder1), as.character(tmOrder1)]
+  out
+}
+
+c.NT<-cor(as.data.frame(t(as.matrix(otu_table(fQ.NTf)))), method=c("pearson"))
+c.CT<-cor(as.data.frame(t(as.matrix(otu_table(fQ.CTf)))), method=c("pearson"))
+c.ORG<-cor(as.data.frame(t(as.matrix(otu_table(fQ.ORGf)))), method=c("pearson"))
+c.NT<-sppcor(fQ.NTf)
+c.CT<-sppcor(fQ.CTf)
+c.ORG<-sppcor(fQ.ORGf)
+
+corrplot::corrplot(c.NT, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="NT")
+
+corrplot::corrplot(c.CT, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="CT")
+corrplot::corrplot(c.ORG, method="color", 
+                   col=colorRampPalette(c("red", "white", "blue"))(200), 
+                   order="original",
+                   #hclust.method = "average",
+                   tl.pos="n",
+                   title="ORG")
+
+interact.summary2<-function(m, d){
+  out<-matrix(nrow=2, ncol=12)
+  rownames(out)<-c("positive", "negative")
+  colnames(out)<-c("pathogen-pathogen", "pathogen-beneficial", "pathogen-commensal", "beneficial-beneficial", "beneficial-pathogen", "beneficial-commensal", "commensal-commensal", "commensal-beneficial", "commensal-pathogen", "total beneficial", "total pathogen", "total commensal")
+  out[,1]<-getinteraction2(m,d,"pp")
+  out[,2]<-getinteraction2(m,d,"pb")
+  out[,3]<-getinteraction2(m,d,"pc")
+  out[,4]<-getinteraction2(m,d,"bb")
+  out[,5]<-getinteraction2(m,d,"bp")
+  out[,6]<-getinteraction2(m,d,"bc")
+  out[,7]<-getinteraction2(m,d,"cc")
+  out[,8]<-getinteraction2(m,d,"cb")
+  out[,9]<-getinteraction2(m,d,"cp")
+  out[,10]<-getinteraction2(m,d,"tb")
+  out[,11]<-getinteraction2(m,d,"tp")
+  out[,12]<-getinteraction2(m,d,"tc")
+  out
+}
+
+getinteraction2<-function(m,d,type){
+  out<-c(NA, NA)
+  if(type=="pp"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="plant_pathogen", tmOrder1=="plant_pathogen"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="bp"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="ectomycorrhizal"|tmOrder1=="arbuscular_mycorrhizal"|tmOrder1=="unspecified_symbiotroph"|tmOrder1=="moss_symbiont", tmOrder1=="plant_pathogen"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="pb"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="plant_pathogen", tmOrder1=="ectomycorrhizal"|tmOrder1=="arbuscular_mycorrhizal"|tmOrder1=="unspecified_symbiotroph"|tmOrder1=="moss_symbiont"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="pc"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="plant_pathogen", tmOrder1=="dung_saprotroph"|tmOrder1=="litter_saprotroph"|tmOrder1=="nectar/tap_saprotroph"|tmOrder1=="soil_saprotroph"|tmOrder1=="unspecified_saprotroph"|tmOrder1=="wood_saprotroph"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="bb"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="ectomycorrhizal"|tmOrder1=="arbuscular_mycorrhizal"|tmOrder1=="unspecified_symbiotroph"|tmOrder1=="moss_symbiont", tmOrder1=="ectomycorrhizal"|tmOrder1=="arbuscular_mycorrhizal"|tmOrder1=="unspecified_symbiotroph"|tmOrder1=="moss_symbiont"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="bc"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="ectomycorrhizal"|tmOrder1=="arbuscular_mycorrhizal"|tmOrder1=="unspecified_symbiotroph"|tmOrder1=="moss_symbiont", tmOrder1=="dung_saprotroph"|tmOrder1=="litter_saprotroph"|tmOrder1=="nectar/tap_saprotroph"|tmOrder1=="soil_saprotroph"|tmOrder1=="unspecified_saprotroph"|tmOrder1=="wood_saprotroph"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  
+  if(type=="cc"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="dung_saprotroph"|tmOrder1=="litter_saprotroph"|tmOrder1=="nectar/tap_saprotroph"|tmOrder1=="soil_saprotroph"|tmOrder1=="unspecified_saprotroph"|tmOrder1=="wood_saprotroph", tmOrder1=="dung_saprotroph"|tmOrder1=="litter_saprotroph"|tmOrder1=="nectar/tap_saprotroph"|tmOrder1=="soil_saprotroph"|tmOrder1=="unspecified_saprotroph"|tmOrder1=="wood_saprotroph"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="cb"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="dung_saprotroph"|tmOrder1=="litter_saprotroph"|tmOrder1=="nectar/tap_saprotroph"|tmOrder1=="soil_saprotroph"|tmOrder1=="unspecified_saprotroph"|tmOrder1=="wood_saprotroph", tmOrder1=="ectomycorrhizal"|tmOrder1=="arbuscular_mycorrhizal"|tmOrder1=="unspecified_symbiotroph"|tmOrder1=="moss_symbiont"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="cp"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="dung_saprotroph"|tmOrder1=="litter_saprotroph"|tmOrder1=="nectar/tap_saprotroph"|tmOrder1=="soil_saprotroph"|tmOrder1=="unspecified_saprotroph"|tmOrder1=="wood_saprotroph", tmOrder1=="plant_pathogen"]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="tb"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="ectomycorrhizal"|tmOrder1=="arbuscular_mycorrhizal"|tmOrder1=="unspecified_symbiotroph"|tmOrder1=="moss_symbiont",]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="tp"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="plant_pathogen",]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  if(type=="tc"){
+    tm<-as.data.frame(as.matrix(tax_table(d)))
+    tmOrder<-tm$primary_lifestyle #tm$Class, tm$Order, 
+    #print(rownames(d1)[1:5])
+    #print(as.character(tmOrder)[1:5])
+    #if(!identical(colnames(d1), as.character(tmOrder))){stop("taxa names not match")} # sanity check
+    tmOrder1<-tmOrder[order(tm$Phylum,tm$Class,tm$Order,tm$Family,tm$Genus,tm$Species)]
+    tmOrder1[is.na(tmOrder1)]<-"Unknown"
+    m<-m[tmOrder1=="dung_saprotroph"|tmOrder1=="litter_saprotroph"|tmOrder1=="nectar/tap_saprotroph"|tmOrder1=="soil_saprotroph"|tmOrder1=="unspecified_saprotroph"|tmOrder1=="wood_saprotroph",]
+    out[1]<-sum(m>0.8& m<1)
+    out[2]<-sum(-0.8>m)
+  }
+  out
+}
+
+interact.summary2(c.NT, fQ.NTf)
+interact.summary2(c.CT, fQ.CTf)
+interact.summary2(c.ORG, fQ.ORGf)
+
+groupintprob<-function(m, d){
+    out<-matrix(nrow=2, ncol=12)
+    rownames(out)<-c("positive", "negative")
+    colnames(out)<-c("pathogen-pathogen", "pathogen-beneficial", "pathogen-commensal", "beneficial-beneficial", "beneficial-pathogen", "beneficial-commensal", "commensal-commensal", "commensal-beneficial", "commensal-pathogen", "total beneficial", "total pathogen", "total commensal")
+    out[,1]<-getinteraction2(m,d,"pp")
+    out[,2]<-getinteraction2(m,d,"pb")
+    out[,3]<-getinteraction2(m,d,"pc")
+    out[,4]<-getinteraction2(m,d,"bb")
+    out[,5]<-getinteraction2(m,d,"bp")
+    out[,6]<-getinteraction2(m,d,"bc")
+    out[,7]<-getinteraction2(m,d,"cc")
+    out[,8]<-getinteraction2(m,d,"cb")
+    out[,9]<-getinteraction2(m,d,"cp")
+    out[,10]<-getinteraction2(m,d,"tb")
+    out[,11]<-getinteraction2(m,d,"tp")
+    out[,12]<-getinteraction2(m,d,"tc")
+ 
+    tt<-as.data.frame(as.matrix(tax_table(d)))
+    tc<-length(tt$primary_lifestyle[tt$primary_lifestyle=="dung_saprotroph"|tt$primary_lifestyle=="litter_saprotroph"|tt$primary_lifestyle=="nectar/tap_saprotroph"|tt$primary_lifestyle=="soil_saprotroph"|tt$primary_lifestyle=="unspecified_saprotroph"|tt$primary_lifestyle=="wood_saprotroph"])
+    
+    tp<-length(tt$primary_lifestyle[tt$primary_lifestyle=="plant_pathogen"])
+    
+    tb<-length(tt$primary_lifestyle[tt$primary_lifestyle=="ectomycorrhizal"|tt$primary_lifestyle=="arbuscular_mycorrhizal"|tt$primary_lifestyle=="unspecified_symbiotroph"|tt$primary_lifestyle=="moss_symbiont"])
+    
+    out[,1]<-out[,1]/(tp*tp)
+    out[,2]<-out[,2]/(tp*tb)
+    out[,3]<-out[,3]/(tp*tc)
+    out[,4]<-out[,4]/(tb*tb)
+    out[,5]<-out[,5]/(tb*tp)
+    out[,6]<-out[,6]/(tb*tc)
+    out[,7]<-out[,7]/(tc*tc)
+    out[,8]<-out[,8]/(tc*tb)
+    out[,9]<-out[,9]/(tc*tp)
+    out[,10]<-out[,10]/(tb*(tc+tp))
+    out[,11]<-out[,11]/(tp*(tb+tc))
+    out[,12]<-out[,12]/(tc*(tp+tb))
+   out
+}
+
+groupintprob2<-function(m, d){
+  out<-matrix(nrow=2, ncol=12)
+  rownames(out)<-c("positive", "negative")
+  colnames(out)<-c("pathogen-pathogen", "pathogen-beneficial", "pathogen-commensal", "beneficial-beneficial", "beneficial-pathogen", "beneficial-commensal", "commensal-commensal", "commensal-beneficial", "commensal-pathogen", "total beneficial", "total pathogen", "total commensal")
+  out[,1]<-getinteraction(m,d,"pp")
+  out[,2]<-getinteraction(m,d,"pb")
+  out[,3]<-getinteraction(m,d,"pc")
+  out[,4]<-getinteraction(m,d,"bb")
+  out[,5]<-getinteraction(m,d,"bp")
+  out[,6]<-getinteraction(m,d,"bc")
+  out[,7]<-getinteraction(m,d,"cc")
+  out[,8]<-getinteraction(m,d,"cb")
+  out[,9]<-getinteraction(m,d,"cp")
+  out[,10]<-getinteraction(m,d,"tb")
+  out[,11]<-getinteraction(m,d,"tp")
+  out[,12]<-getinteraction(m,d,"tc")
+  
+  tt<-as.data.frame(as.matrix(tax_table(d)))
+  tc<-length(tt$primary_lifestyle[tt$primary_lifestyle=="dung_saprotroph"|tt$primary_lifestyle=="litter_saprotroph"|tt$primary_lifestyle=="nectar/tap_saprotroph"|tt$primary_lifestyle=="soil_saprotroph"|tt$primary_lifestyle=="unspecified_saprotroph"|tt$primary_lifestyle=="wood_saprotroph"])
+  
+  tp<-length(tt$primary_lifestyle[tt$primary_lifestyle=="plant_pathogen"])
+  
+  tb<-length(tt$primary_lifestyle[tt$primary_lifestyle=="ectomycorrhizal"|tt$primary_lifestyle=="arbuscular_mycorrhizal"|tt$primary_lifestyle=="unspecified_symbiotroph"|tt$primary_lifestyle=="moss_symbiont"])
+  
+  out[,1]<-out[,1]/(tp*tp)
+  out[,2]<-out[,2]/(tp*tb)
+  out[,3]<-out[,3]/(tp*tc)
+  out[,4]<-out[,4]/(tb*tb)
+  out[,5]<-out[,5]/(tb*tp)
+  out[,6]<-out[,6]/(tb*tc)
+  out[,7]<-out[,7]/(tc*tc)
+  out[,8]<-out[,8]/(tc*tb)
+  out[,9]<-out[,9]/(tc*tp)
+  out[,10]<-out[,10]/(tb*(tb+tc+tp))
+  out[,11]<-out[,11]/(tp*(tb+tc+tp))
+  out[,12]<-out[,12]/(tc*(tc+tp+tb))
+  out
+}
+
+tt<-as.data.frame(as.matrix(tax_table(fQ.NTf)))
+length(tt$primary_lifestyle[tt$primary_lifestyle=="dung_saprotroph"|tt$primary_lifestyle=="litter_saprotroph"|tt$primary_lifestyle=="nectar/tap_saprotroph"|tt$primary_lifestyle=="soil_saprotroph"|tt$primary_lifestyle=="unspecified_saprotroph"|tt$primary_lifestyle=="wood_saprotroph"])
+
+length(tt$primary_lifestyle[tt$primary_lifestyle=="plant_pathogen"])
+
+length(tt$primary_lifestyle[tt$primary_lifestyle=="ectomycorrhizal"|tt$primary_lifestyle=="arbuscular_mycorrhizal"|tt$primary_lifestyle=="unspecified_symbiotroph"|tt$primary_lifestyle=="moss_symbiont"])
+
+groupintprob(c.NT, fQ.NTf)
+groupintprob(c.CT, fQ.CTf)
+groupintprob(c.ORG, fQ.ORGf)
+
+
+groupintprob2(f.NTnet, fQ.NTf)
+groupintprob2(f.CTnet, fQ.CTf)
+groupintprob2(f.Org3net, fQ.ORGf)
 
 
 # neural network scratch space
